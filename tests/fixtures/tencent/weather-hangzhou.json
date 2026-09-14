@@ -1,0 +1,89 @@
+{
+  "status": 0,
+  "message": "Success",
+  "result": {
+    "forecast": [
+      {
+        "province": "浙江省",
+        "city": "杭州市",
+        "district": "西湖区",
+        "adcode": 330106,
+        "update_time": "2026-09-02 23:05",
+        "infos": [
+          {
+            "date": "2026-09-02",
+            "week": "星期三",
+            "day": {
+              "weather": "暴雨",
+              "temperature": 28,
+              "wind_direction": "东北风",
+              "wind_power": "4-5级",
+              "humidity": 99
+            },
+            "night": {
+              "weather": "小雨",
+              "temperature": 24,
+              "wind_direction": "东北风",
+              "wind_power": "微风",
+              "humidity": 93
+            }
+          },
+          {
+            "date": "2026-09-03",
+            "week": "星期四",
+            "day": {
+              "weather": "小雨",
+              "temperature": 30,
+              "wind_direction": "东北风",
+              "wind_power": "微风",
+              "humidity": 95
+            },
+            "night": {
+              "weather": "小雨",
+              "temperature": 23,
+              "wind_direction": "北风",
+              "wind_power": "微风",
+              "humidity": 68
+            }
+          },
+          {
+            "date": "2026-09-04",
+            "week": "星期五",
+            "day": {
+              "weather": "多云",
+              "temperature": 30,
+              "wind_direction": "北风",
+              "wind_power": "微风",
+              "humidity": 94
+            },
+            "night": {
+              "weather": "多云",
+              "temperature": 23,
+              "wind_direction": "北风",
+              "wind_power": "微风",
+              "humidity": 66
+            }
+          },
+          {
+            "date": "2026-09-05",
+            "week": "星期六",
+            "day": {
+              "weather": "小雨",
+              "temperature": 31,
+              "wind_direction": "北风",
+              "wind_power": "微风",
+              "humidity": 93
+            },
+            "night": {
+              "weather": "小雨",
+              "temperature": 22,
+              "wind_direction": "北风",
+              "wind_power": "微风",
+              "humidity": 47
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

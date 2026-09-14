@@ -1,0 +1,16 @@
+{
+  "platform": "douban",
+  "query": "杭州 西湖 旅游 攻略 site:douban.com",
+  "recordedAt": "2026-09-02T23:55:20.000Z",
+  "recorder": "宿主 web_search 真实录制（L0）",
+  "hits": [
+    {
+      "title": "杭州五天游，有没有什么推荐的景点",
+      "url": "https://www.douban.com/group/topic/341182427/?_spm_id=MTcwNzQzMTE5"
+    },
+    {
+      "title": "杭州一日游有啥好玩的吗",
+      "url": "https://www.douban.com/group/topic/498645847/"
+    }
+  ]
+}

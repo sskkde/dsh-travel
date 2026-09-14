@@ -1,0 +1,5 @@
+{
+  "_provenance": "真实录制 2026-09-02：curl restapi.amap.com/v3 各端点 + 无效 key，返回的鉴权拒绝信封（key 门控实证）。",
+  "request": { "endpoint": "geocode/geo", "key": "<已清洗>" },
+  "response": { "status": "0", "info": "INVALID_USER_KEY", "infocode": "10001" }
+}

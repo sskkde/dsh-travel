@@ -1,0 +1,19 @@
+{
+  "_comment": "get_feed_detail 响应 fixture（2026-09-04 live 登录态实录形态：外层 {feed_id, data:{note}}；业务字段对齐 xiaohongshu/types.go，token/用户标识为 synthetic）。此前 {note:直挂} 为 schema 推导误设，已按 live 修正。",
+  "feed_id": "65f1a2b3000000001234abcd",
+  "data": {
+    "note": {
+      "noteId": "65f1a2b3000000001234abcd",
+      "xsecToken": "ABTOKENAAA111",
+      "title": "杭州三日游超全攻略！人均800玩转西湖",
+      "desc": "Day1 西湖断桥→白堤→平湖秋月，晚上湖滨银泰；Day2 灵隐寺+飞来峰（记得提前约门票）；Day3 西溪湿地摇橹船。门票、路线、美食全整理，人均800足够。",
+      "type": "normal",
+      "time": 1759500000000,
+      "ipLocation": "浙江",
+      "user": { "userId": "u1", "nickname": "旅行家小王", "nickName": "", "avatar": "" },
+      "interactInfo": { "liked": false, "likedCount": "1.2万", "sharedCount": "356", "commentCount": "890", "collectedCount": "2.3万" },
+      "imageList": []
+    }
+  },
+  "comments": { "hasMore": false, "list": [] }
+}

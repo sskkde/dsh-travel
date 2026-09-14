@@ -1,0 +1,120 @@
+{
+  "status": 0,
+  "message": "Success",
+  "count": 602,
+  "data": [
+    {
+      "id": "4019164873071910113",
+      "title": "楼外楼(杭州西湖风景名胜区店)",
+      "address": "浙江省杭州市西湖区西湖风景名胜区北山街孤山路30号(近平湖秋月)",
+      "tel": "0571-87969023",
+      "category": "美食:中餐厅:浙江菜",
+      "type": 0,
+      "location": {
+        "lat": 30.250263,
+        "lng": 120.140935
+      },
+      "_distance": 891.9,
+      "ad_info": {
+        "adcode": 330106,
+        "province": "浙江省",
+        "city": "杭州市",
+        "district": "西湖区"
+      },
+      "avg_price": 155,
+      "opening_hours": "10:30-14:30,16:00-20:30",
+      "star_level": 4.3
+    },
+    {
+      "id": "2924865743515744150",
+      "title": "新丰小吃(庆春路分店)",
+      "address": "浙江省杭州市上城区湖滨街道庆春路209号天阳明珠商业中心1-2层",
+      "tel": "0571-87760810",
+      "category": "美食:中餐厅:其它中餐厅",
+      "type": 0,
+      "location": {
+        "lat": 30.258161,
+        "lng": 120.164432
+      },
+      "_distance": 1911.98,
+      "ad_info": {
+        "adcode": 330102,
+        "province": "浙江省",
+        "city": "杭州市",
+        "district": "上城区"
+      },
+      "avg_price": 16,
+      "opening_hours": "05:00-20:30",
+      "star_level": 4.4
+    },
+    {
+      "id": "11332293176735773606",
+      "title": "海底捞火锅(湖滨银泰店)",
+      "address": "浙江省杭州市上城区延安路239号in77D区五层L5-01号商铺",
+      "tel": "0571-87030335;0571-87036615",
+      "category": "美食:火锅",
+      "type": 0,
+      "location": {
+        "lat": 30.253263,
+        "lng": 120.163237
+      },
+      "_distance": 1507.21,
+      "ad_info": {
+        "adcode": 330102,
+        "province": "浙江省",
+        "city": "杭州市",
+        "district": "上城区"
+      },
+      "avg_price": 100,
+      "opening_hours": "10:00-07:00",
+      "star_level": 4.8
+    },
+    {
+      "id": "16356743961315403025",
+      "title": "西湖家宴杭帮菜",
+      "address": "浙江省杭州市上城区湖滨街道湖滨88地下负一层美食广场(近音乐喷泉)",
+      "tel": "17328880163",
+      "category": "美食:中餐厅:浙江菜",
+      "type": 0,
+      "location": {
+        "lat": 30.254197,
+        "lng": 120.161759
+      },
+      "_distance": 1438.78,
+      "ad_info": {
+        "adcode": 330102,
+        "province": "浙江省",
+        "city": "杭州市",
+        "district": "上城区"
+      },
+      "avg_price": 57,
+      "opening_hours": null,
+      "star_level": 4.4
+    },
+    {
+      "id": "2918644886120419121",
+      "title": "蟹满春·江南蟹黄面(湖滨店)",
+      "address": "浙江省杭州市上城区平海路124号湖滨88商场B1",
+      "tel": "17328880163",
+      "category": "美食:中餐厅:其它中餐厅",
+      "type": 0,
+      "location": {
+        "lat": 30.254835,
+        "lng": 120.162608
+      },
+      "_distance": 1546.27,
+      "ad_info": {
+        "adcode": 330102,
+        "province": "浙江省",
+        "city": "杭州市",
+        "district": "上城区"
+      },
+      "avg_price": 63,
+      "opening_hours": "10:00-22:00",
+      "star_level": 4.3
+    }
+  ],
+  "region": {
+    "title": "中国"
+  }
+}

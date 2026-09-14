@@ -1,0 +1,19 @@
+{
+  "positive": [
+    {"id":"pos-route-1","title":"青甘大环线6天5晚自驾路线","summary":"西宁、敦煌、茶卡盐湖行程安排与路况建议","url":"https://example.invalid/pos-route-1"},
+    {"id":"pos-route-2","title":"青甘大环线景点顺序怎么排","summary":"门源、张掖、敦煌路线与游玩时间","url":"https://example.invalid/pos-route-2"},
+    {"id":"pos-lodging-1","title":"青甘环线酒店推荐与避雷","summary":"敦煌住宿区域、入住和房间选择经验","url":"https://example.invalid/pos-lodging-1"},
+    {"id":"pos-food-1","title":"西宁美食攻略","summary":"牛肉面、小吃和餐厅推荐","url":"https://example.invalid/pos-food-1"},
+    {"id":"pos-ticket-1","title":"莫高窟门票预约攻略","summary":"预约时间、门票和游览注意事项","url":"https://example.invalid/pos-ticket-1"},
+    {"id":"pos-tip-1","title":"青甘高原旅行注意事项","summary":"高反、防晒、证件和行李清单","url":"https://example.invalid/pos-tip-1"},
+    {"id":"pos-transport-1","title":"敦煌到冷湖自驾交通","summary":"公里数、停车和路况信息","url":"https://example.invalid/pos-transport-1"},
+    {"id":"pos-place-1","title":"茶卡盐湖景区值得去吗","summary":"景区开放时间与游览体验","url":"https://example.invalid/pos-place-1"}
+  ],
+  "noise": [
+    {"id":"noise-form","title":"Google表单填写与提交指南","summary":"点击提交领取优惠","url":"https://example.invalid/noise-form"},
+    {"id":"noise-download","title":"bilibili视频下载器免费下载","summary":"立即下载客户端","url":"https://example.invalid/noise-download"},
+    {"id":"noise-game","title":"Geometry Dash - Apps on Google Play","summary":"游戏下载与安装","url":"https://example.invalid/noise-game"},
+    {"id":"noise-antivirus","title":"联想电脑管家软件下载","summary":"正版软件下载和病毒查杀","url":"https://example.invalid/noise-antivirus"},
+    {"id":"noise-switch","title":"Nintendo Switch游戏下载网站","summary":"免费下载最新游戏资源","url":"https://example.invalid/noise-switch"}
+  ]
+}

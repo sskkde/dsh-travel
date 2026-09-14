@@ -1,0 +1,32 @@
+{
+  "status": 0,
+  "message": "Success",
+  "result": {
+    "rows": [
+      {
+        "elements": [
+          {
+            "distance": 686295,
+            "duration": 28562
+          },
+          {
+            "distance": 2955,
+            "duration": 349
+          }
+        ]
+      },
+      {
+        "elements": [
+          {
+            "distance": 0,
+            "duration": 60
+          },
+          {
+            "distance": 691767,
+            "duration": 28426
+          }
+        ]
+      }
+    ]
+  }
+}

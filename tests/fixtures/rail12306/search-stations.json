@@ -1,0 +1,22 @@
+{
+  "tool": "search-stations",
+  "arguments": {
+    "query": "杭州东",
+    "limit": 5
+  },
+  "recordedAt": "2026-09-02T15:50:15.599Z",
+  "result": {
+    "success": true,
+    "query": "杭州东",
+    "count": 1,
+    "stations": [
+      {
+        "name": "杭州东",
+        "code": "HGH",
+        "pinyin": "hangzhoudong",
+        "py_short": "hzd",
+        "num": "87"
+      }
+    ]
+  }
+}

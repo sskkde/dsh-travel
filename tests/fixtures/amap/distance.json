@@ -1,0 +1,21 @@
+{
+  "_provenance": "结构=高德 Web 服务 v3 distance 官方文档格式；数值为演示样例（无 key，live blocked）。；2026-09-02 重录失败（amap 拒绝: MISSING_REQUIRED_PARAMS (20001)），保留原结构样例；2026-09-02 重录失败（amap 拒绝: MISSING_REQUIRED_PARAMS (20001)），保留原结构样例",
+  "request": {
+    "origins": "116.481028,39.989643",
+    "destination": "114.481028,39.989643",
+    "type": "1"
+  },
+  "response": {
+    "status": "1",
+    "info": "OK",
+    "infocode": "10000",
+    "results": [
+      {
+        "origin_id": "0",
+        "dest_id": "0",
+        "distance": "175316",
+        "duration": "8832"
+      }
+    ]
+  }
+}

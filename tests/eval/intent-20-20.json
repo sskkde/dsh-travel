@@ -1,0 +1,412 @@
+{
+  "name": "dsh-travel intent 20+20 (M3.4 / FR-1 验收①②)",
+  "version": "1.0",
+  "description": "意图评测集：20 条 travel（应命中=加载 travel-planner skill 或调用任一 travel_* 工具）+ 20 条 non-travel（误触发口径=出现上述任一行为）。中英混合覆盖：明确旅行请求、「十一/五一」类时段台词、边界样本（如『帮我写旅行攻略的作文题目』属 non-travel）。纯文本数据集，无敏感内容，进 git。",
+  "acceptance": {
+    "travelHitRate": "≥ 18/20（FR-1 验收①：≥90%）",
+    "nonTravelFalseTrigger": "≤ 1/20（FR-1 验收②：≤5%）",
+    "hitDefinition": "模型加载 travel-planner skill 或调用任一 travel_* 工具"
+  },
+  "items": [
+    {
+      "id": "t-01",
+      "label": "travel",
+      "text": "帮我规划五一去重庆的三日游",
+      "expectedAction": "call travel_intake",
+      "language": "zh",
+      "length": "short",
+      "boundary": false,
+      "rationale": "明确旅行规划请求（FR-1 触发示例原型）；含目的地/假期时段，缺出发地——预期进入 intake 槽位收集"
+    },
+    {
+      "id": "t-02",
+      "label": "travel",
+      "text": "我想下周去西安玩三天，帮我 plan 一下",
+      "expectedAction": "call travel_intake",
+      "language": "zh-en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "FR-1 触发示例变体；中英 code-switch（plan 作动词），检验混合语言下的意图识别"
+    },
+    {
+      "id": "t-03",
+      "label": "travel",
+      "text": "Plan a 5-day trip to Tokyo this December for two people.",
+      "expectedAction": "call travel_intake",
+      "language": "en",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "英文明确规划请求，槽位基本齐全（目的地/天数/人数/时段）"
+    },
+    {
+      "id": "t-04",
+      "label": "travel",
+      "text": "推荐几个适合带老人玩的海边城市",
+      "expectedAction": "load skill travel-planner（recommend 分支：call travel_intake mode=recommend 或先检索候选）",
+      "language": "zh",
+      "length": "short",
+      "boundary": false,
+      "rationale": "FR-1 触发示例：目的地推荐意图（推荐模式）；目的地缺失不应阻止命中"
+    },
+    {
+      "id": "t-05",
+      "label": "travel",
+      "text": "十一去哪儿人少又好玩？帮我挑一个做个攻略",
+      "expectedAction": "load skill travel-planner（推荐/规划分支）",
+      "language": "zh",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "「十一」时段台词 + 攻略检索意图（FR-1 触发范围含游记/攻略检索）；带『帮我…做』的动作请求而非纯知识问答"
+    },
+    {
+      "id": "t-06",
+      "label": "travel",
+      "text": "Organize a weekend getaway from Shanghai to Hangzhou next Saturday.",
+      "expectedAction": "call travel_intake",
+      "language": "en",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "英文短途周末行程安排，含出发地/目的地/时段"
+    },
+    {
+      "id": "t-07",
+      "label": "travel",
+      "text": "带娃亲子游，元旦三天，从广州出发有什么好去处？帮我做个行程",
+      "expectedAction": "load skill travel-planner（recommend 分支）",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "目的地缺失的推荐意图 + 同行人构成槽位（儿童）；「帮我做个行程」为明确规划动作"
+    },
+    {
+      "id": "t-08",
+      "label": "travel",
+      "text": "I want to visit Chengdu for the food scene. Help me plan the itinerary.",
+      "expectedAction": "call travel_intake",
+      "language": "en",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "英文规划请求，含偏好槽位（美食主题）"
+    },
+    {
+      "id": "t-09",
+      "label": "travel",
+      "text": "帮我安排一个三亚五天四晚的度假行程，两个人，预算两万",
+      "expectedAction": "call travel_intake",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "槽位丰富的完整规划请求（目的地/天数/人数/预算），预期一次收齐进确认"
+    },
+    {
+      "id": "t-10",
+      "label": "travel",
+      "text": "春节假期想去看雪，东北那边怎么玩？帮我规划一下",
+      "expectedAction": "load skill travel-planner（推荐/规划分支）",
+      "language": "zh",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "「春节」时段台词 + 模糊目的地（东北）+ 明确规划动词"
+    },
+    {
+      "id": "t-11",
+      "label": "travel",
+      "text": "查一下北京到上海的高铁，顺便帮我把两天的行程排好",
+      "expectedAction": "call travel_*（轻量交通查询 + 规划分支；travel_intake 或 transport 相关工具任一）",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "交通查询 + 行程安排复合意图（FR-1 触发范围含交通查询；FR-1 详 5 轻量直答口径）；判定仍按『任一 travel_* 工具』"
+    },
+    {
+      "id": "t-12",
+      "label": "travel",
+      "text": "Plan my honeymoon in Bali for 7 days with a mid-range budget.",
+      "expectedAction": "call travel_intake",
+      "language": "en",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "英文长行程规划请求，含预算档位与旅行类型（蜜月）"
+    },
+    {
+      "id": "t-13",
+      "label": "travel",
+      "text": "五一从成都出发两天一夜去哪玩？帮忙排个不动车的行程",
+      "expectedAction": "load skill travel-planner（recommend/规划分支）",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "「五一」时段台词 + 出发地固定目的地缺失 + 特殊约束（不动车）"
+    },
+    {
+      "id": "t-14",
+      "label": "travel",
+      "text": "I need a one-day itinerary for Kyoto next month.",
+      "expectedAction": "call travel_intake",
+      "language": "en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "英文单日行程请求（短文本样本）"
+    },
+    {
+      "id": "t-15",
+      "label": "travel",
+      "text": "帮我做个杭州西湖一日游的攻略，最好有吃饭的地方",
+      "expectedAction": "load skill travel-planner / call travel_*（攻略检索分支）",
+      "language": "zh",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "一日游攻略请求 + 餐饮偏好；『做攻略』属旅行领域意图（非写作请求——对照 n-01 边界样本）"
+    },
+    {
+      "id": "t-16",
+      "label": "travel",
+      "text": "We are four adults visiting Xi'an in October — can you build our travel plan?",
+      "expectedAction": "call travel_intake",
+      "language": "en",
+      "length": "long",
+      "boundary": false,
+      "rationale": "英文团体出行规划请求，含人数/时段"
+    },
+    {
+      "id": "t-17",
+      "label": "travel",
+      "text": "公司团建想找个周边温泉小镇，帮我们策划一下两天行程",
+      "expectedAction": "load skill travel-planner（recommend/规划分支）",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "团建策划意图，目的地模糊（周边温泉小镇）+ 天数明确"
+    },
+    {
+      "id": "t-18",
+      "label": "travel",
+      "text": "帮我妈安排一次云南昆大丽七日游，她一个人飞过去",
+      "expectedAction": "call travel_intake",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "多目的地线路（昆明-大理-丽江）规划；同行人构成（长辈独行）"
+    },
+    {
+      "id": "t-19",
+      "label": "travel",
+      "text": "What's a good 3-day plan for Bangkok with kids?",
+      "expectedAction": "call travel_intake",
+      "language": "en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "英文亲子行程请求（短文本 + 儿童同行槽位）"
+    },
+    {
+      "id": "t-20",
+      "label": "travel",
+      "text": "我想五一出去走走，帮我把目的地、行程都定一下",
+      "expectedAction": "load skill travel-planner（recommend 分支）",
+      "language": "zh",
+      "length": "short",
+      "boundary": false,
+      "rationale": "「五一」时段台词 + 全槽位缺失的开放规划请求（推荐模式入口）"
+    },
+    {
+      "id": "n-01",
+      "label": "non-travel",
+      "text": "帮我写旅行攻略的作文题目",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "short",
+      "boundary": true,
+      "rationale": "边界样本（用户决策口径）：写作请求（作文题目），非真实旅行需求——出现 travel_* 调用或 skill 加载即误触发"
+    },
+    {
+      "id": "n-02",
+      "label": "non-travel",
+      "text": "翻译成英文：我想去旅游",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "short",
+      "boundary": true,
+      "rationale": "边界样本：翻译任务，引号内含旅行表述但会话意图是翻译"
+    },
+    {
+      "id": "n-03",
+      "label": "non-travel",
+      "text": "Write a short poem about the ocean.",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "英文创作请求，与旅行规划无关"
+    },
+    {
+      "id": "n-04",
+      "label": "non-travel",
+      "text": "旅行攻略一般包括哪些部分？给我一个写作提纲",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "medium",
+      "boundary": true,
+      "rationale": "边界样本：关于『攻略写作』的元问题（知识问答/写作辅助），非检索或规划真实行程"
+    },
+    {
+      "id": "n-05",
+      "label": "non-travel",
+      "text": "What is the capital of France?",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "地理知识问答，不涉及行程安排"
+    },
+    {
+      "id": "n-06",
+      "label": "non-travel",
+      "text": "帮我查一下明天北京的天气",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "short",
+      "boundary": true,
+      "rationale": "边界样本：单点天气查询（FR-1 触发范围外的单点查询；非旅行规划语境）"
+    },
+    {
+      "id": "n-07",
+      "label": "non-travel",
+      "text": "把这段话总结成一句话：本季度公司营收增长 12%，主要来自海外市场扩张与新会员体系上线。",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "文本摘要任务"
+    },
+    {
+      "id": "n-08",
+      "label": "non-travel",
+      "text": "How do I improve my English listening skills?",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "学习方法咨询"
+    },
+    {
+      "id": "n-09",
+      "label": "non-travel",
+      "text": "帮我写一首关于春天出行的现代诗",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "medium",
+      "boundary": true,
+      "rationale": "边界样本：『出行』仅作诗歌意象，创作为真实意图"
+    },
+    {
+      "id": "n-10",
+      "label": "non-travel",
+      "text": "Explain the pros and cons of high-speed rail versus flying for business commuting.",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "long",
+      "boundary": true,
+      "rationale": "边界样本：交通方式的一般性对比（知识问答），无具体出行请求"
+    },
+    {
+      "id": "n-11",
+      "label": "non-travel",
+      "text": "公司年会主持词怎么写？给我一个开场白模板",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "long",
+      "boundary": false,
+      "rationale": "公文写作辅助"
+    },
+    {
+      "id": "n-12",
+      "label": "non-travel",
+      "text": "Recommend a good book about world history.",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "『Recommend』触发词但对象是书籍（非目的地推荐）——检验推荐意图的对象边界"
+    },
+    {
+      "id": "n-13",
+      "label": "non-travel",
+      "text": "帮我算一下每月存三千，一年下来能存多少钱",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "short",
+      "boundary": false,
+      "rationale": "算术问答"
+    },
+    {
+      "id": "n-14",
+      "label": "non-travel",
+      "text": "什么是预算管理？和企业差旅预算有什么区别？",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "medium",
+      "boundary": true,
+      "rationale": "边界样本：『预算/差旅』为概念术语问答，非为具体行程做预算"
+    },
+    {
+      "id": "n-15",
+      "label": "non-travel",
+      "text": "十一黄金周是哪几天？为什么有时放八天有时放七天？",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "medium",
+      "boundary": true,
+      "rationale": "边界样本：「十一」时段台词但纯节假日知识问答，无出行请求（对照 t-05）"
+    },
+    {
+      "id": "n-16",
+      "label": "non-travel",
+      "text": "Tell me a fun fact about Japan.",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "目的地国家趣味知识，非行程规划"
+    },
+    {
+      "id": "n-17",
+      "label": "non-travel",
+      "text": "帮我写一封请假邮件，理由是家中有事需要处理",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "medium",
+      "boundary": false,
+      "rationale": "邮件写作辅助"
+    },
+    {
+      "id": "n-18",
+      "label": "non-travel",
+      "text": "Hotel loyalty points — how do they usually work?",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "medium",
+      "boundary": true,
+      "rationale": "边界样本：酒店会员体系常识问答，无预订或行程请求"
+    },
+    {
+      "id": "n-19",
+      "label": "non-travel",
+      "text": "帮我起三个旅游博主风格的账号名",
+      "expectedAction": "none",
+      "language": "zh",
+      "length": "short",
+      "boundary": true,
+      "rationale": "边界样本：『旅游』仅是账号定位词，命名请求非规划请求"
+    },
+    {
+      "id": "n-20",
+      "label": "non-travel",
+      "text": "Passport renewal office hours on weekdays?",
+      "expectedAction": "none",
+      "language": "en",
+      "length": "short",
+      "boundary": false,
+      "rationale": "证件办理行政咨询（旅行周边但非规划意图）"
+    }
+  ]
+}

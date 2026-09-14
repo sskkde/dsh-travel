@@ -1,0 +1,18 @@
+node_modules/
+lib/
+dist/
+*.tsbuildinfo
+*.tgz
+.dsh-spike-settings/
+.spikes-probe/
+# 虚拟环境/临时噪音（F3 comment-check 噪音项）：任意 .venv-* 前缀 venv 与 .tmp* 临时目录不入库
+.venv-*/
+.pip-cache/
+.tmp*
+
+# dsh-travel 插件store工作区（运行时产物，不入库）
+.dsh-travel/
+
+# dsh-travel 独立测试环境（2026-09-04 新规：插件测试禁止在生产宿主进行）
+# 隔离 DSH_HOME/credentials 副本/实例日志/pid 均为机器本地状态，不入库
+.test-env/

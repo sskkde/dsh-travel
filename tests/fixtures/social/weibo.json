@@ -1,0 +1,16 @@
+{
+  "platform": "weibo",
+  "query": "杭州 西湖 旅游 避雷 site:weibo.com",
+  "recordedAt": "2026-09-02T23:55:10.000Z",
+  "recorder": "宿主 web_search 真实录制（L0）",
+  "hits": [
+    {
+      "title": "夏末苏堤麦冬花开 西湖沿线现紫色浪漫花海",
+      "url": "https://weibo.com/2/detail/5338612212433898?utm_source=travel"
+    },
+    {
+      "title": "今天是#杭州西湖 的生日，浙浙祝... - @浙浙 的微博精选 - 微博国际站",
+      "url": "https://overseas.weibo.com/1997946033/PxZUKh0MC"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>行程 · __PAGE_TITLE__</title>
+<meta id="page-csp" http-equiv="Content-Security-Policy" content="__CSP_POLICY__">
+<!--
+  T6 map-first contract:
+  * 独立 src/render/page/ bundle（esbuild → page.bundle.js）内联为单文件；
+  * AMap.Map / AMap.Marker / AMap.Polyline / AMap.InfoWindow 主通道，L.marker / L.polyline
+    为 Leaflet + OSM 降级通道；GCJ-02↔WGS-84 转换只在显示侧执行；保留
+    function gcj02ToWgs84 / function wgs84ToGcj02 / gcjTransformLat / coords.sys / tile.openstreetmap.org
+    / leaflet@1.9.4 / '[dsh-travel] stops=' / function activateDay / showMapNotice 结构契约；
+  * mouseenter/mouseover hover ≤150ms，click 锁定，Tab/Enter/Escape keyboard，mobile drawer；
+    用户触发 play/fly-to，@media (prefers-reduced-motion: reduce) 禁止无触发动画；
+  * routeTransport / renderRouteTransport 按 leg 消费 WGS84 GeoJSON；不可用段不画道路；
+    geometryStatus 缺失/estimated 使用虚线并标注「轨迹直线示意，里程为实测」，metricStatus=estimated 才标估算；
+  * 研究与行程文本由运行时 textContent 写入；引用折叠置于卡片最后。
+  * CSP 由 render.ts 对最终 style/script bundle 计算 hash；不放开内联执行或任意远端脚本。
+  * 兼容审计标记：webapi.amap.com/maps?v=2.0、_AMapSecurityConfig、securityJsCode、
+    renderArtifactStatus、上游工件状态、intel-item、content-grade、已取正文、&lt;、&amp;、new Blob([、a.download、
+    URL.createObjectURL、URL.revokeObjectURL、window.print()、class="src-link"。
+  * print CSS contract keeps map/timeline/source text visible while hiding export controls.
+-->
+<!--
+@media print {
+  #exportBar, #dayTabs { display: none }
+  .src-link { display: inline }
+  }
+-->
+<style id="page-styles">__PAGE_STYLES__</style>
+</head>
+<body>
+<main id="app" class="page-shell">
+  <section id="overviewCard" class="page-card">
+    <div id="exportBar" class="overview-actions">
+      <button id="btnDownloadJson" class="action-button" type="button">下载 JSON</button>
+      <button id="btnDownloadMarkdown" class="action-button" type="button">下载 Markdown</button>
+      <button id="btnPrintPdf" class="action-button" type="button">打印/PDF</button>
+    </div>
+  </section>
+
+  <div id="mainGrid">
+    <aside id="timelineCard" class="page-card" aria-label="日程轨道"></aside>
+
+    <section id="mapCard" class="page-card" aria-label="行程地图">
+      <div id="mapToolbar" class="map-toolbar">
+        <h2 class="map-title">地图与道路路线</h2>
+        <span id="mapProviderLabel" class="muted small"></span>
+      </div>
+      <div id="mapWarnStrip" class="hidden" role="status"></div>
+      <div id="mapStatus" class="notice" role="status">地图骨架点位加载中……</div>
+      <div id="map" aria-label="行程地图画布"></div>
+      <div id="routeLegend" aria-label="路线图例"></div>
+      <div id="legList" aria-label="逐段道路距离与时长"></div>
+    </section>
+
+    <aside id="dayDrawer" class="page-card mobile-drawer" data-mobile-drawer="true">
+      <button id="drawerToggle" class="drawer-toggle" type="button" aria-expanded="false" aria-controls="dayCard">当日卡片</button>
+      <section id="dayCard" aria-label="当日推荐与指南"></section>
+    </aside>
+  </div>
+
+  <div id="supplementalGrid">
+    <section id="insightsCard" class="page-card supplement-card">
+      <h2>归纳建议</h2>
+      <div id="insightsBody" class="data-list"></div>
+    </section>
+    <section id="transportCard" class="page-card supplement-card hidden">
+      <h2>交通方案</h2>
+      <div id="transportBody"></div>
+    </section>
+    <section id="foodCard" class="page-card supplement-card">
+      <h2>美食指南</h2>
+      <div id="foodBody" class="data-list"></div>
+    </section>
+    <section id="lodgingCard" class="page-card supplement-card">
+      <h2>住宿指南</h2>
+      <div id="lodgingBody" class="data-list"></div>
+    </section>
+    <section id="warningCard" class="page-card supplement-card">
+      <h2>避雷提示</h2>
+      <div id="warningBody" class="data-list"></div>
+    </section>
+    <section id="adviceCard" class="page-card supplement-card hidden">
+      <h2>出行建议</h2>
+      <div id="adviceBody"></div>
+    </section>
+    <section id="rentalCostCard" class="page-card supplement-card hidden">
+      <h2>租车咨询与预算</h2>
+      <div id="rentalCostBody"></div>
+    </section>
+    <section id="degradedStrip" class="hidden" role="status"></section>
+  </div>
+</main>
+<footer>由 dsh-travel 生成 · <span id="mapFooter">地图归属由页面引擎显示</span> · 单文件行程页</footer>
+
+<script id="travel-data" type="application/json">__TRAVEL_DATA__</script>
+<script id="travel-export" type="application/json">__TRAVEL_EXPORT__</script>
+<script id="page-runtime">__PAGE_BUNDLE__</script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+{
+  "_comment": "search_feeds 响应 fixture（schema-derived synthetic：对齐 xpzouying/xiaohongshu-mcp xiaohongshu/types.go Feed/NoteCard/InteractInfo，2026-09-04 实测响应外层 {feeds:[],count}）。live 登录态真录待扫码交割后回填（gated-pending）。",
+  "feeds": [
+    {
+      "xsecToken": "ABTOKENAAA111",
+      "id": "65f1a2b3000000001234abcd",
+      "modelType": "note",
+      "noteCard": {
+        "type": "normal",
+        "displayTitle": "杭州三日游超全攻略！人均800玩转西湖",
+        "user": { "userId": "u1", "nickname": "旅行家小王", "nickName": "", "avatar": "" },
+        "interactInfo": { "liked": false, "likedCount": "1.2万", "sharedCount": "356", "commentCount": "890", "collectedCount": "2.3万" },
+        "cover": { "width": 1080, "height": 1440, "url": "", "fileId": "", "urlPre": "", "urlDefault": "", "infoList": [] }
+      },
+      "index": 0
+    },
+    {
+      "xsecToken": "CDTOKENBBB222",
+      "id": "65f1a2b3000000001234ef01",
+      "modelType": "note",
+      "noteCard": {
+        "type": "video",
+        "displayTitle": "杭州避雷！这三个坑千万别踩",
+        "user": { "userId": "u2", "nickname": "杭州本地人", "nickName": "", "avatar": "" },
+        "interactInfo": { "liked": false, "likedCount": "4321", "sharedCount": "120", "commentCount": "233", "collectedCount": "999" },
+        "cover": { "width": 1080, "height": 1440, "url": "", "fileId": "", "urlPre": "", "urlDefault": "", "infoList": [] }
+      },
+      "index": 1
+    },
+    {
+      "xsecToken": "LIVETOK99999",
+      "id": "live_card_x",
+      "modelType": "live_v2",
+      "noteCard": { "type": "live", "displayTitle": "直播卡（应被过滤）", "user": {}, "interactInfo": {} },
+      "index": 2
+    }
+  ],
+  "count": 3
+}

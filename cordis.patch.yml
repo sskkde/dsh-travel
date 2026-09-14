@@ -1,0 +1,4 @@
+# dsh-travel bundle patch: mount into the profile.
+- insert:
+    - id: dsh-travel
+      name: 'dsh-travel'
