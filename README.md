@@ -1,11 +1,13 @@
 # dsh-travel
 
-旅行规划插件（hybrid：node 工具 + client 设置页预留）。
+旅行规划插件（hybrid：node 工具 + 已实现的 client 设置页）。
 
-一句话旅行需求 → 追问 ≤3 轮 → 调用方驱动的串行主链：研究 → 正文（可选）→ assessment → advice → resolve →（交通/报价旁车）→ build → render 可交互行程页（全条目溯源、降级透明）。旧版三 research 轻量查询仍保留；完整链路、build 后补 advice 恢复回路和工件迁移语义详见 `docs/round3-migration.md` 与 `skills/travel-planner/SKILL.md`。doc：`docs/`（requirements v1.5 / design v2.2 / roadmap v1.0）。
+一句话旅行需求 → 追问 ≤3 轮 → 调用方驱动的串行主链：研究 → 正文（可选）→ assessment → advice → resolve →（交通/报价旁车）→ build → render 可交互行程页（全条目溯源、降级透明）。旧版三 research 轻量查询仍保留；完整链路、build 后补 advice 恢复回路和工件迁移语义详见 `docs/round3-migration.md` 与 `skills/travel-planner/SKILL.md`。doc：`docs/`（requirements v1.5 / design v2.3 / roadmap v1.0）。
 
 ## 工程地基（W0）
 
+- 宿主要求：DSH **0.1.7-rc.2**（已验证版本；0.1.1-rc.2 及更早的 settings API 面不适用）。node 半导出 `Config` 并由 `apply(ctx, config)` 持有，使用 `config.<field>.get()` 热读；client 半通过 `settings.section` + `ctx.configForms` 展示/编辑，controller 内部写入走 `ctx.remote.settings`。settings 命名空间=loader entry id `dsh-travel`。
+- 构建依赖由 `scripts/build.sh` link 全局 0.1.7 安装树维护；旧 `$HOME/dsh-harness` checkout 可能仍为 0.1.1。
 - 包根 = 工作区根；`src/`（node 半 + client 半），`scripts/build.sh`（DSH_CHECKOUT 自动探测）
 - 构建：`bash scripts/build.sh`（或 `dev_build_plugin`）；注入：`dev_inject_plugin`
 - 验证：`npm run typecheck`（tsc --noEmit）· `npm test`（vitest run）· `dev_self_test`

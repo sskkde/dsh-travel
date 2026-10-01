@@ -30,6 +30,8 @@
 
 agent-presets（启动时按 preset 组合插件）/ persona（prompt 段）/ commands（`/命令` 注册表）均非意图触发机制。
 
+> 更新注记（2026-10-01）：下文 Q5 的 `settingsNamespace` API 面已失效——宿主自 0.1.5 起（本机于 2026-09-23 升级）删除 `settingsNamespace`、`SettingsScope` 与 `settings.plugin.item`，客户端旧包 `dsh-client-runtime` 亦已删除。本插件已于 2026-10-01 完成适配：四组 volatile `Config` + `apply(ctx, config)` 热读、`settings.section` + `configForms`（写由 controller 经 `remote.settings`），settings 命名空间=loader entry id `dsh-travel`；详见 [design.md v2.3](../design.md)。调研记录原文保留。
+
 ## Q5 配置与密钥
 
 - `ctx.credentials.resolve("<scope>/<id>")`（dsh-credentials-local :473）；落地 `$DSH_HOME/.credentials.yaml`；读取分层：process env -> `<cwd>/.env` -> `$DSH_HOME/.env` -> 托管 store

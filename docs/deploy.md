@@ -5,6 +5,8 @@
 
 ## 1. 插件构建与注入（DSH dev 链路）
 
+> 前置：宿主需 DSH **0.1.7-rc.2**（已验证版本；0.1.1-rc.2 及更早的 settings API 面不适用）；client externals 必须属于宿主 materialize 的模块 id 集合。`scripts/build.sh` 会为 0.1.7 client 包建立 link。
+
 | 步骤 | 命令/工具 | 说明 |
 |---|---|---|
 | 安装依赖 | `npm install` | devDeps（typescript/vitest/tsdown）+ peerDeps（cordis 等范围声明，npm 10 自动装） |
@@ -15,7 +17,7 @@
 | 状态 | `dev_plugin_status` | 应可见 `dsh-travel` 条目 |
 | 注入器自检 | `dev_self_test` | 全链路 PASS |
 
-- `DSH_CHECKOUT` 探测顺序：环境变量 → `$HOME/dsh-harness` / `$HOME/dsh` / `$HOME/.dsh/dsh-harness` → `/usr/lib/node_modules/@deepseek-ai/dsh`（全局 npm 安装形态）。
+- `DSH_CHECKOUT` 探测顺序：环境变量 → `/usr/lib/node_modules/@deepseek-ai/dsh` → `/usr/local/lib/node_modules/@deepseek-ai/dsh` → `$HOME/dsh-harness` → `$HOME/dsh` → `$HOME/.dsh/dsh-harness`。全局安装路径优先于 `$HOME/dsh-harness`，因为后者可能是陈旧的 0.1.1 checkout（曾导致 API/依赖错配）；应以实际安装的 0.1.7 宿主为构建依据。
 - 构建产物：`lib/index.js`（node 半）+ `lib/client.js`（client 半，`window.__ModuleLoader__.load` 注册）。
 
 ## 2. 12306 MCP server（HTTP 模式）部署指南

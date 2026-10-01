@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 |---|---|
-| 文档版本 | v2.2（v2.1 基础上，新增 FR-8 设置页设计：渠道开关矩阵 + Key CRUD，settings.plugin.item 插槽注册，§10.1） |
+| 文档版本 | v2.3（0.1.7 宿主适配：settings 注册/设置页槽/客户端读写面换代） |
 | 项目代号 | dsh-travel（暂定） |
 | 配套文档 | [需求文档](./requirements.md) |
 | 调研档案 | [CloakBrowser 与备选](./research/cloakbrowser.md) · [携程问道与平台数据](./research/ctrip-wendao-platforms.md) · [高德地图开放平台](./research/amap.md) · [可复用开源方案](./research/reusable-opensrc-mcp.md) · [DSH 插件框架 API](./research/dsh-plugin-api.md) · [DSH 插件生态](./research/dsh-plugin-ecosystem.md) · [workbuddyskills 资产评估](./research/workbuddyskills.md) · [L0/L1 社媒检索实测](./research/l0-social-search-test.md) |
@@ -38,7 +38,7 @@
 | FR-5 出行建议 | `travel_research_advice`：高德天气（行程期逐日，渠道二=腾讯 weather 零key -> Open-Meteo 免key）+ 搜索（穿衣/物品） | 物品清单由模型结合槽位画像定制。 |
 | FR-6 行程方案生成 | 主模型生成草案 + `travel_build_itinerary`（draft 入参落盘 + 动线校验：高德距离/路线为主，腾讯 distance_matrix 零key 为渠道二，直线距离估算兜底）；tencentmap travel_guide 可作结构化行程素材补充 | 动线校验避免"跨城折返"硬伤；draft 参数支撑增量修订。 |
 | FR-7 可视化展示 | `travel_render_page`：模板渲染自包含 HTML -> `ctx.webServer.register({kind:"prefix"})` 在线访问 + 本地文件双交付 | 地图组件：高德 JS API 2.0（有 key）<br>Leaflet+OSM（无 key 降级）。 |
-| FR-8 设置页 | **client 半设置卡**（`ctx.slots.inject('settings.plugin.item')` 注册进 DSH 设置-插件页，先例=dsh-web-search-pro SettingsCard）+ **settings 命名空间 `travel` 持久化**（`settingsScope.bind({namespace:'travel'})`，key 字段 `role('secret')` 自动脱敏）：功能渠道开关矩阵（FR-3~7 × 渠道独立启停）+ 渠道 Key CRUD；工具每次执行热读取最新配置（保存即生效）。详见 §10.1 | 注册机制已由 dsh-web-search-pro 同形态验证（client 模块 `exports["./client"]` + slots 注入 + settingsScope）；保存时执行 NFR-10 冗余校验（<2 渠道警示）。 |
+| FR-8 设置页 | **node 半导出 Config（channels/keys/advanced/research，字段 volatile）并由 `apply(ctx, config)` 持有，运行期通过 `config.<field>.get()` 热读**；`ctx.settings.configure({auto:true}, ctx.fiber)` 启用宿主配置表单。client 半以 `configForms` 获取 `dsh-travel` 表单快照/订阅/写入，controller 内部经 `remote.settings` mutate；组件注册到 `settings.section`（options 含 `id:'dsh-travel'`）。Key 字段 `role('secret')` 自动脱敏；settings 命名空间=loader entry id `dsh-travel`。详见 §10.1 | 保存即生效；Key 读取顺序 settings Config 值 → credentials → env；保存时执行 NFR-10 冗余校验（<2 渠道警示）。 |
 
 ### 2.1 全需求渠道与降级矩阵（设计原则 3 的落地与验收口径）
 
@@ -241,9 +241,9 @@ dsh-travel/
 │  │  ├─ template.html     # 行程页模板（高德 JS API 2.0 + Leaflet 双 loader）
 │  │  └─ render.ts         # Itinerary JSON -> 自包含 HTML
 │  ├─ client/              # client 半（FR-8 设置卡，exports["./client"]，§10.1）
-│  │  ├─ index.ts          #   apply: slots.inject('settings.plugin.item') + locale 注册
+│  │  ├─ index.ts          #   apply: configForms/remote + settings.section 注入 + locale 注册
 │  │  ├─ SettingsCard.tsx  #   设置卡（渠道开关矩阵 + Key 管理 + 高级配置）
-│  │  ├─ form.ts           #   控制器（settingsScope 读写 / save/discard / 冗余校验）
+│  │  ├─ form.ts           #   控制器（configForms 快照/订阅/mutate / save/discard / 冗余校验）
 │  │  ├─ fields.ts         #   字段定义（开关/secret key/高级）
 │  │  └─ locales.ts        #   zh/en 文案
 │  └─ store/               # .dsh-travel/<planId>/ 状态与产物持久化（数据模型见 §5.5）
@@ -294,7 +294,7 @@ flowchart TB
     ADP["适配器层<br/>search / xhs（xiaohongshu-mcp+CloakBrowser增强）/ social /<br/>tencent（POI补充）/ amap / rail12306 /<br/>intercity（机票+汽车票）/ didi / wendao(可选)"]
     STORE["存储层<br/>workspace .dsh-travel/{planId}/<br/>request/intel/transport/advice/itinerary/page"]
     RENDER["渲染层<br/>模板 + Itinerary JSON -> HTML"]
-    SETUI["client 半：SettingsCard 设置卡<br/>（settings.plugin.item 插槽：渠道开关+Key 管理，FR-8）"]
+    SETUI["client 半：SettingsCard 设置卡<br/>（settings.section + configForms：渠道开关+Key 管理，FR-8）"]
   end
 
   subgraph External["外部数据源"]
@@ -326,7 +326,7 @@ flowchart TB
   STORE -->|"register prefix 路由 /travel-plans/{planId}"| WS
   WS -->|"浏览器打开行程页"| UI
   UI <-->|"DSH 设置-插件页"| SETUI
-  SETUI <-->|"settingsScope(namespace=travel) 读写"| CRED
+  SETUI <-->|"configForms 读写（controller 经 remote.settings）"| CRED
 ```
 
 ### 5.3 关键设计决策（ADR）
@@ -344,7 +344,7 @@ flowchart TB
 | ADR-9 | **目的地推荐不设专用工具**，由模型+宿主 web_search 完成候选生成，`travel_intake(mode=recommend)` 管状态 | 反向推理本质是综合判断，搜索工具已够用 |
 | ADR-10 | **双渠道冗余为硬约束**：每项 FR ≥2 实现渠道、每渠道含降级路径（§2.1 矩阵验收） | v2.0 用户决策；单渠道失效不阻塞任何需求 |
 | ADR-11 | **FR-3 采用"社媒三层检索 + 腾讯地图 POI 补充"双轨**；**FR-4 市内衔接采用"高德 + 滴滴"双方案（公共交通选项）** | v2.0 用户决策；社媒拿真实评价/避雷（软情报），腾讯 POI 拿结构化评分/人均/营业时间（硬数据），互补成完整情报；市内双方案互为降级 |
-| ADR-12 | **设置页经 `settings.plugin.item` 插槽注册（client 半）+ settings 命名空间 `travel` 持久化（key 字段 role('secret') 脱敏）+ 工具执行时热读取配置（保存即生效，无需重启）**；Key 读取顺序=settings（设置页）-> credentials -> env | v2.2 用户决策（FR-8）；注册机制由 dsh-web-search-pro 同形态验证（SettingsCard/settingsScope/credential 编辑先例，见 [DSH 插件生态档案](./research/dsh-plugin-ecosystem.md)）；热读取使渠道开关与 Key 变更即时生效；env/credentials 兜底保留部署自动化通道 |
+| ADR-12 | **0.1.7：node 半导出 Config（四组字段 volatile），`apply(ctx, config)` 持有并以 `config.<field>.get()` 热读；宿主 `ctx.settings.configure({auto:true}, ctx.fiber)` 提供原生表单。client 半注册 `settings.section`（options id=`dsh-travel`），经 `ctx.configForms.get('dsh-travel')` 读写，controller 内部由 `ctx.remote.settings` 执行 mutate；命名空间=loader entry id `dsh-travel`；Key `role('secret')` 脱敏。Key 顺序=settings Config 值 -> credentials -> env** | 保留设置页注册 + 命名空间持久化 + 热读精神；0.1.1→0.1.7 变更依据：宿主删除 settingsNamespace/SettingsScope/settings.plugin.item 与 dsh-client-runtime 包；设置保存即时作用于下一次工具调用，env/credentials 兜底保留部署自动化通道 |
 
 ### 5.4 数据流与状态机
 
@@ -681,37 +681,26 @@ sequenceDiagram
 
 ### 10.1 设置页设计（FR-8，DSH 设置-插件页注册）
 
-**注册机制（先例验证：dsh-web-search-pro SettingsCard）**：client 半模块（`package.json exports["./client"]`）导出 `apply(ctx)` + `inject = ['slots','locale','connection','settingsScope']`；经 `ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({name:'settings.plugin.item', key:'travel', id:'travel', locale, inject}, SettingsCard))` 注入 DSH 设置-插件页卡片插槽；`ctx.locale.register(NS, {zh,en})` 双语；node 半以 `settingsNamespace('travel')` 注册 schema（key 字段 `role('secret')` 自动脱敏）。
+**注册与客户端读写机制（宿主 0.1.7）**：node 模块导出 `Config`（channels/keys/advanced/research 四组；字段 `.volatile()`），`apply(ctx, config)` 持有配置，运行期用 `config.<field>.get()` 热读；调用 `ctx.settings.configure({auto:true}, ctx.fiber)` 启用宿主原生配置表单。命名空间为 loader entry id `dsh-travel`。client `inject` 使用 `configForms`/`remote`；`ctx.configForms.get('dsh-travel')` 提供 `getSnapshot/subscribe/set/unset/mutate`，写操作由 controller 内部经 `ctx.remote.settings` 完成；设置卡注册到 `settings.section`，options 为 `{name:'settings.section', id:'dsh-travel', order:70, label, locale:'travel', inject}`，组件 props 来自 PropsRuntime/PropsLocale/PropsRenderSlots/InjectFace（id/order/label 仅在 options）。Key 字段 `role('secret')` 自动脱敏。
 
-**配置数据模型（settings 命名空间 `travel`，三组）**：
+**配置数据模型（命名空间=entry id `dsh-travel`，四组；字段与缺省值以 `src/settings/schema.ts` 为准）**：
 
 ```jsonc
 {
-  // ① 功能渠道开关矩阵（FR × channel，每项独立启停；被停用渠道在编排中跳过并计入 degraded[]「已停用（用户配置）」）
+  // ① channels：功能渠道开关矩阵
   "channels": {
-    "fr3": { "xhsMcp": true, "xhsFallback": true, "xhsCloak": false, "douyin": true,
-             "tier2": true, "tier3": true, "tencentPoi": true, "platformIntel": true },
-    "fr4": { "rail12306": true, "railWendao": true, "railFlyai": true,
-             "flightWendao": true, "flightFlyai": true, "busConsult": true,
-             "cityAmap": true, "cityDidi": false },
+    "fr3": { "xhsMcp": true, "xhsFallback": true, "xhsCloak": false, "douyin": true, "tier2": true, "tier3": true, "tencentPoi": true, "platformIntel": true, "socialL1": true, "didaHotel": false },
+    "fr4": { "rail12306": true, "railWendao": true, "railFlyai": true, "flightWendao": true, "flightFlyai": true, "busConsult": true, "cityAmap": true, "cityDidi": false },
     "fr5": { "weatherAmap": true, "weatherTencent": true, "weatherOpenMeteo": true, "adviceSearch": true },
     "fr6": { "routeCheckAmap": true, "routeCheckTencent": true, "travelGuideTencent": true },
     "fr7": { "mapAmap": true, "mapLeaflet": true, "deliveryRoute": true, "deliveryFile": true }
   },
-  // ② 渠道 Key（按渠道维度绑定，role('secret') 脱敏存储）
-  "keys": {
-    "amapWebservice": "string(secret)?",          // 高德 Web 服务（FR-4/5/6）
-    "amapJsapi": "string(secret)?", "amapJscode": "string(secret)?",  // 行程页地图（FR-7）
-    "wendao": "string(secret)?",                   // 携程问道
-    "flyai": "string(secret)?",                    // 飞猪
-    "didi": "string(secret)?",                     // 滴滴 MCP
-    "tmap": "string(secret)?",                     // 腾讯位置服务正式 key（可选增强）
-    "cloakbrowser": "string(secret)?"              // CloakBrowser license（增强，默认 off）
-  },
-  // ③ 高级配置（原 Config 收敛至此）
-  "advanced": { "socialDepth": "L1", "researchTimeoutMs": 180000, "rateLimitPerDomain": 10,
-                "routePrefix": "/travel-plans", "defaultMapProvider": "auto",
-                "amapPoiBudgetPerPlan": 40, "amapRestBudgetPerPlan": 60, "profileTtlDays": 7 }
+  // ② keys：均 role('secret')；未配置字段缺省（空对象）
+  "keys": { "amapWebservice": "string?", "amapJsapi": "string?", "amapJscode": "string?", "wendao": "string?", "flyai": "string?", "didi": "string?", "tmap": "string?", "cloakbrowser": "string?", "didaHotel": "string?", "zhihu": "string?" },
+  // ③ advanced：高级配置
+  "advanced": { "socialDepth": "L1", "researchTimeoutMs": 180000, "rateLimitPerDomain": 10, "robotsToSCheck": true, "routePrefix": "/travel-plans", "defaultMapProvider": "auto", "amapSecurityMode": "A", "amapPoiBudgetPerPlan": 40, "amapRestBudgetPerPlan": 60, "profileTtlDays": 7, "companionAutostart": false, "companionServices": { "rail12306": true, "xhs": true, "playwright": true, "didi": true } },
+  // ④ research：深度研究额度
+  "research": { "deep": { "maxRoundsPerPlan": 16, "maxContentItemsPerPlan": 40, "maxContentCharsPerItem": 100000 } }
 }
 ```
 
@@ -725,7 +714,7 @@ sequenceDiagram
 
 操作语义：`save()` 持久化 / `discard()` 回滚 / 刷新；**保存后立即生效**（无需重启）。
 
-**生效机制（ADR-12）**：工具每次执行时经 settings 服务**热读取**最新配置快照（channels 过滤 fan-out 渠道集、keys 供适配器 available() 检查）——开关与 Key 变更即时作用于下一次工具调用；静态部署参数（routePrefix 等）随保存生效。
+**生效机制（ADR-12）**：`apply(ctx, config)` 持有 loader Config；各字段为 volatile，工具执行时通过 `config.<field>.get()` 热读最新解析值（channels 过滤 fan-out 渠道集、keys 供适配器 available() 检查），保存变更即时作用于下一次工具调用。Key 解析顺序为 Config 值 → credentials → env。
 
 ### 10.2 Key 读取顺序与凭据兜底
 
@@ -797,5 +786,6 @@ sequenceDiagram
 - **未确认事项清单（透明登记）**：携程问道定价与配额（key 已实测可用、8 连调无异常，配额上限未知）；高德 MCP 专用配额页与天气查询配额分类；CloakBrowser Pro 价格及闭源补丁的 MIT 法律边界；**汽车票稳定结构化数据源**；程心大模型开放接入方式。设计上这些不确定项均不位于核心链路（汽车票已降级为 P1 咨询路径）。
 - 修订记录（v1.x 历次评审与实测回写详见 git 历史与 research/ 档案；要点）：v1.1 momus 审查修复（S1~S7/B1~B15）；v1.2 携程问道实测；v1.3 workbuddyskills 评估；v1.4 四技能深度核验；v1.5 L0 实测+L0.5 新增；v1.6 dsh-web-search-pro 源码核验；v1.7 小红书直抓内容级实测；v1.8 小红书完整性审计（判定不全）；v1.9 用户决策（CloakBrowser 主路径+渠道三层）；v1.10 备选调研（xiaohongshu-mcp）。
 - 修订记录：v2.2 新增 FR-8 设置页设计（2026-09-01 用户需求，requirements v1.5 同步）：①client 半设置卡经 `ctx.slots.inject('settings.plugin.item')` 注册进 DSH 设置-插件页（机制由 dsh-web-search-pro SettingsCard 先例验证：exports["./client"] + slots + settingsScope.bind({namespace}) + locale）；②配置模型三组落盘（§10.1）：功能渠道开关矩阵（FR-3~7 × 渠道独立启停，停用渠道计入 degraded[]）/ 渠道 Key（role('secret') 脱敏，CRUD+脱敏查看）/ 高级配置；③生效机制=工具执行时热读取 settings 快照（保存即生效，ADR-12）；④Key 读取顺序 settings -> credentials -> env；⑤保存时 NFR-10 冗余校验（<2 渠道软警示）；⑥§5.1 包结构增 client/、§5.2 架构图增 SETUI、§11 增 Key 泄漏风险行、§12 M1/M2 纳入设置页里程碑。
+- 修订记录：v2.3（2026-10-01）对齐 DSH 0.1.7-rc.2：node 侧由 `settingsNamespace/register/SettingsScope` 迁为导出四组 volatile `Config` + `apply(ctx, config)`/`config.<field>.get()`，宿主原生表单由 `ctx.settings.configure({auto:true}, ctx.fiber)` 启用；client 侧由旧 slot/settingsScope 迁为 `settings.section` + `configForms`（写经 `remote.settings`）；命名空间语义改为 loader entry id `dsh-travel`。Key 顺序 settings Config 值 → credentials → env 不变。**本条取代 v2.2 的注册机制描述**；0.1.1→0.1.7 变更依据：宿主自 0.1.5 起（本机 2026-09-23 升级）删除 settingsNamespace/SettingsScope/settings.plugin.item 与 dsh-client-runtime 包。
 - 修订记录：v2.1 补全 §5.1 适配器契约（规范形 Canonical Form / 请求变换规则表 / 响应归一化 / 能力协商），回答"同一工具如何统一不同源参数差异"——LLM 只见规范形，源差异（参数格式、自然语言接口、坐标系、单位、枚举值）封闭在适配器双向变换中。
 - 修订记录：**v2.0 重构（2026-09-01，用户指令）**：①ADR-4 决策切换——xiaohongshu-mcp 为主路径（`search_feeds` 只读挂载）、CloakBrowser 降为高风控增强方案（默认 off），同步更新 §2/§3/§4/§5/§10/§11 全部关联处；②FR-3 落盘"社媒三层检索 + 腾讯地图 POI 补充"双轨方案（§5.4 渠道方案表，IntelItem 增 channel/rating/avgPrice/openingHours 字段）；③FR-4 市内衔接落盘"高德 + 滴滴"双方案（公共交通选项，TransportOption 增 cityTransfer 结构）；④新增 §2.1 全需求渠道与降级矩阵（每项需求 ≥2 渠道、每渠道含降级，M3 演练验收）与设计原则 3"双渠道冗余"；⑤候选工具精简——移除 16 项未采用工具及全部引用（清单见上"精简记录"），核心工具收敛为 6 项（xiaohongshu-mcp/CloakBrowser/携程问道/高德/滴滴/腾讯 map-assistant + 基础设施件 drfccv-12306/Playwright-MCP/flyai/dsh-web-search-pro）。

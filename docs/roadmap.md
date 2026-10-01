@@ -110,7 +110,7 @@ M1/M2/M3 合计约 **40~50 人日**（M1 ≈ 15~20，M2 ≈ 12~16，M3 ≈ 11~14
 
 | 项 | 内容 |
 |---|---|
-| 工作包 | ① client 半：`exports["./client"]` + `slots.inject('settings.plugin.item')` 注册 + locale 双语；② settings 命名空间 `travel` 三组模型落 schema（§10.1：channels 核心开关 + keys secret 脱敏 + advanced）；③ `form.ts`：`settingsScope.bind({namespace:'travel'})` 读写、save/discard；④ **热读取接线收口**：适配器基类的 Key 解析链与渠道过滤接上 settings 快照（M1.1 埋的位在此贯通） |
+| 工作包 | ① client 半：`exports["./client"]` + `slots.inject('settings.plugin.item')` 注册 + locale 双语；② settings 命名空间 `travel` 三组模型落 schema（§10.1：channels 核心开关 + keys secret 脱敏 + advanced）；③ `form.ts`：`settingsScope.bind({namespace:'travel'})` 读写、save/discard；④ **热读取接线收口**：适配器基类的 Key 解析链与渠道过滤接上 settings 快照（M1.1 埋的位在此贯通）。**as-built（2026-10-01）：此处为 M1 历史计划写法；实际已按 design.md v2.3 适配 0.1.7：Config 四组 + volatile 热读，`settings.section`/`configForms`，命名空间=entry id `dsh-travel`。** |
 | 产出物 | `src/client/` 五文件（index/SettingsCard/form/fields/locales） |
 | 依赖 | M1.1（spike 已验证注册机制）；不阻塞工具链轨 |
 | DoD | FR-8 验收①②③：设置卡出现在 DSH 设置-插件页可操作；开关切换下一次工具调用即生效（关腾讯 POI→intel 里该渠道条目消失并计入 degraded）；Key 新增/编辑/删除持久化 + 脱敏显示；删除某 Key→对应渠道 available()=false→degraded 标注（验收④） |
@@ -313,7 +313,7 @@ flowchart LR
 
 | 风险 | 等级 | 路线图应对 |
 |---|---|---|
-| DSH 插件 API 表面假设（slots/settingsScope/webServer 组合形态）与宿主版本漂移 | 中 | M1.1 宿主面冒烟 spike 前置消除；机制先例 dsh-web-search-pro 源码作参照（§4.1） |
+| DSH 插件 API 表面假设（slots/settingsScope/webServer 组合形态）与宿主版本漂移 | 中 | **as-built：风险已实际发生（2026-09-23，宿主 0.1.5+/0.1.7 删除相关设置 API），并已完成 0.1.7 适配；现行机制见 design.md v2.3。** 原 M1.1 冒烟 spike 为历史应对记录。 |
 | xiaohongshu-mcp 首启下载约 150MB + 扫码登录的部署摩擦 | 中 | M2.1 文档化；M3.5 自动拉起收尾；未部署不阻塞（降级链 M1 已备） |
 | 外部平台页面结构变化导致 golden fixture 失效 | 中 | fixture 与 live smoke 分离（flag），live 失败只降级标记不挂 CI；适配器小文件易热替换 |
 | L0.5 直抓对 xsec_token 时效敏感 | 中 | "命中即抓、缓存抓取结果而非 URL"（§5.4 L0.5 行）在 M1.2 实现为硬规则 |
