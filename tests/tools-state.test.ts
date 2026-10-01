@@ -2,6 +2,7 @@
  * travel_get_state 单测（进度/产物/NFR-9 + 明确 not-found 不崩）。
  */
 import { mkdtempSync, rmSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -70,6 +71,30 @@ describe('get_state 主路径', () => {
     const state = await runGetState({ planId: created.planId }, store)
     expect(state.degraded).toHaveLength(1)
     expect(state.degraded[0]?.reason).toBe('Key 未配置')
+  })
+
+  // 回归：渲染后的计划目录含 page.html（原文工件）。旧实现把 listArtifacts 的全部
+  // 条目送进 JSON.parse → `Unexpected token '<'`，渲染过的计划再也查不到状态。
+  it('page.html 存在 → get_state 不崩，非 JSON 工件如实标 unknown/non_json_artifact', async () => {
+    const created = await runIntake({ slots: { destination: '杭州', dateStart: '2026-10-01', dateEnd: '2026-10-03', days: 3 } }, store)
+    await writeFile(join(store.planDir(created.planId), 'page.html'), '<!doctype html><html><body>行程页</body></html>', 'utf8')
+
+    const state = await runGetState({ planId: created.planId }, store)
+    expect(state.found).toBe(true)
+    expect(state.artifacts).toContain('page.html')
+    expect(state.artifactStatus?.['page.html']).toEqual({ state: 'unknown', staleReason: 'non_json_artifact' })
+    // 投影仍须 JSON 往返无损（宿主 lossless-JSON 闸门）
+    const projected = projectState(state) as Record<string, unknown>
+    expect(JSON.parse(JSON.stringify(projected))).toEqual(projected)
+  })
+
+  it('store 层：非 JSON 工件只判存在，不做 JSON 解析', async () => {
+    const created = await runIntake({ slots: { destination: '杭州' } }, store)
+    const missing = await store.readArtifactWithState(created.planId, 'page.html')
+    expect(missing).toMatchObject({ found: false, status: 'missing' })
+    await writeFile(join(store.planDir(created.planId), 'page.html'), '<!doctype html>', 'utf8')
+    const present = await store.readArtifactWithState(created.planId, 'page.html')
+    expect(present).toMatchObject({ found: true, status: 'unknown', staleReason: 'non_json_artifact' })
   })
 })
 

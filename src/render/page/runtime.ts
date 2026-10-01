@@ -853,10 +853,9 @@ function mapViewBounds(points: DisplayPoint[]): { minLng: number; minLat: number
   }), { minLng: points[0].lng, minLat: points[0].lat, maxLng: points[0].lng, maxLat: points[0].lat })
 }
 
-function buildMapAdapter(state: PageState): MapHandle | undefined {
+function buildMapAdapter(state: PageState, provider: 'amap' | 'leaflet' = currentProvider(state.data)): MapHandle | undefined {
   const mapElement = byId<HTMLElement>('map')
   if (mapElement === undefined || state.markerModels.length === 0) return undefined
-  const provider = currentProvider(state.data)
   const points = state.markerModels.map((marker) => marker.point)
   const bounds = mapViewBounds(points)
   const center = points.reduce((sum, point) => ({ lng: sum.lng + point.lng / points.length, lat: sum.lat + point.lat / points.length }), { lng: 0, lat: 0 })
@@ -866,8 +865,27 @@ function buildMapAdapter(state: PageState): MapHandle | undefined {
     const amap = typeof AMap === 'undefined' ? undefined : AMap
     if (amap === undefined) throw new Error('AMap SDK 未加载')
     const map = new amap.Map(mapElement, { center: [center.lng, center.lat], zoom: 6, viewMode: '2D' })
-    map.addControl(new amap.Scale())
-    map.addControl(new amap.ToolBar())
+    // 控件是可选增强：JSAPI 2.0 的 `plugin=` URL 参数不保证注册 AMap.Scale/ToolBar，
+    // 实测 AMap.Map 可用而 AMap.Scale===undefined。旧实现 `new amap.Scale()` 直接抛
+    // 「c.Scale is not a constructor」把整张地图拖垮——这里改为特性探测 + 显式 plugin
+    // 加载，控件缺失只少两个控件，绝不让地图失败。
+    const addOptionalControls = (): void => {
+      try {
+        if (typeof amap.Scale === 'function') map.addControl(new amap.Scale())
+        if (typeof amap.ToolBar === 'function') map.addControl(new amap.ToolBar())
+      } catch {
+        // 控件失败不影响地图本体
+      }
+    }
+    if (typeof amap.plugin === 'function') {
+      try {
+        amap.plugin(['AMap.Scale', 'AMap.ToolBar'], addOptionalControls)
+      } catch {
+        addOptionalControls()
+      }
+    } else {
+      addOptionalControls()
+    }
     const infoWindow = new amap.InfoWindow({ offset: new amap.Pixel(0, -28), autoMove: true })
     for (const model of state.markerModels) {
       const pin = createMapPin(model)
@@ -984,10 +1002,57 @@ function renderLegList(state: PageState): void {
   if (state.segments.length === 0) list.appendChild(make('div', 'notice', '暂无可绘制道路几何；不可用/阻断路段不伪装为道路。'))
 }
 
-function initMap(state: PageState): void {
+/** 统一状态构建：provider 决定坐标投影（amap=GCJ-02 / leaflet=WGS-84）与路线几何。 */
+function createState(data: RenderPageData, provider: 'amap' | 'leaflet'): PageState {
+  const stops = flattenStops(data, provider)
+  const markerResult = deterministicMarkerModels(stops)
+  return {
+    data, stops, markerModels: markerResult.models, segments: routeSegments(data, stops, provider),
+    markerHandles: [], routeHandles: [], dayIndex: 0, drawerOpen: false,
+  }
+}
+
+/**
+ * amap 不可用 → 就地降级 Leaflet。
+ * 必须整体重建 stops/markerModels/segments：amap 用 GCJ-02 投影、Leaflet/OSM 需要
+ * WGS-84，沿用旧点位会整体偏移约 500m。返回 false = 当前并非 amap 视图（不重复降级）。
+ */
+function degradeToLeaflet(state: PageState, reason: string): boolean {
+  if (currentProvider(state.data) !== 'amap') return false
+  const warnings = [...(state.data.map?.warnings ?? []), `高德地图不可用（${reason}），已自动降级 Leaflet/OSM`]
+  const degraded = createState({ ...state.data, map: { ...state.data.map, provider: 'leaflet', warnings } }, 'leaflet')
+  state.data = degraded.data
+  state.stops = degraded.stops
+  state.markerModels = degraded.markerModels
+  state.segments = degraded.segments
+  state.map = undefined
+  state.markerHandles = []
+  state.routeHandles = []
+  setDataset('provider', 'leaflet')
+  setDataset('amapFallback', 'true')
+  renderWarnings(state)
+  renderMapControls(state)
+  renderLegList(state)
+  return true
+}
+
+/** amap 失败后的 Leaflet 补装 + 重试（SDK/样式按需加载；再失败如实标注，不伪造地图）。 */
+function loadLeafletFallback(state: PageState, reason: string): void {
+  if (!degradeToLeaflet(state, reason)) return
+  loadCss('https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', () => {})
+  loadJs('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', () => {
+    initMap(state, 'leaflet')
+    if (typeof L !== 'undefined') setMapStatus(`高德地图不可用（${reason}），已自动降级 Leaflet/OSM。`, 'warning')
+  }, () => {
+    setDataset('mapReady', 'leaflet-loader-error')
+    setMapStatus('高德地图不可用，且 Leaflet SDK 加载失败（网络不可达）；保留静态日程列表。', 'warning')
+  })
+}
+
+function initMap(state: PageState, provider: 'amap' | 'leaflet' = currentProvider(state.data)): void {
   try {
     clearSkeleton()
-    state.map = buildMapAdapter(state)
+    state.map = buildMapAdapter(state, provider)
     if (state.map === undefined) {
       setMapStatus('暂无带坐标的行程点位，已保留静态日程列表。')
       setDataset('mapReady', 'no-coordinates')
@@ -995,7 +1060,7 @@ function initMap(state: PageState): void {
     }
     state.markerHandles = state.map.markers
     state.routeHandles = state.map.routes
-    setDataset('mapReady', currentProvider(state.data))
+    setDataset('mapReady', provider)
     setDataset('markers', String(state.markerModels.length))
     setDataset('stops', String(state.stops.length))
     setDataset('clustered', state.markerModels.length < state.stops.filter((stop) => stop.point !== undefined).length ? 'true' : 'false')
@@ -1005,11 +1070,19 @@ function initMap(state: PageState): void {
     if (status !== undefined && state.data.map.warnings.length === 0) status.classList.add('hidden')
     console.log(`[dsh-travel] stops=${state.stops.length} markers=${state.markerModels.length}`)
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    // 运行期失败（SDK 插件缺失/CSP 拦截/坐标异常）→ 原定 amap 时自动降级 Leaflet，
+    // 不让「地图为核心」的页面退化成纯静态列表。
+    if (provider === 'amap') {
+      console.log(`[dsh-travel] amap error: ${message} → 降级 Leaflet`)
+      loadLeafletFallback(state, message)
+      return
+    }
     clearSkeleton()
-    setDataset('mapReady', `${currentProvider(state.data)}-error`)
-    setMapStatus(`地图初始化失败：${error instanceof Error ? error.message : String(error)}；静态日程仍可用。`, 'warning')
+    setDataset('mapReady', `${provider}-error`)
+    setMapStatus(`地图初始化失败：${message}；静态日程仍可用。`, 'warning')
     renderLegList(state)
-    console.log(`[dsh-travel] map error: ${error instanceof Error ? error.message : String(error)}`)
+    console.log(`[dsh-travel] map error: ${message}`)
   }
 }
 
@@ -1171,8 +1244,10 @@ function startLoader(state: PageState): void {
       initMap(state)
     }, () => {
       setDataset('mapReady', 'amap-loader-error')
-      setMapStatus('高德地图 SDK 加载失败（网络不可达或 key 无效），保留静态日程列表。', 'warning')
+      setMapStatus('高德地图 SDK 加载失败（网络不可达或 key 无效），尝试降级 Leaflet/OSM。', 'warning')
       renderLegList(state)
+      // SDK 整体加载失败同样走 Leaflet 降级（不再只剩静态列表）。
+      loadLeafletFallback(state, 'SDK 加载失败')
     })
     return
   }
@@ -1197,12 +1272,8 @@ function bootPage(): void {
     return
   }
   const provider = currentProvider(data)
-  const stops = flattenStops(data, provider)
-  const markerResult = deterministicMarkerModels(stops)
-  const state: PageState = {
-    data, stops, markerModels: markerResult.models, segments: routeSegments(data, stops, provider),
-    markerHandles: [], routeHandles: [], dayIndex: 0, drawerOpen: false,
-  }
+  const state = createState(data, provider)
+  const markerResult = { clustered: state.markerModels.length < state.stops.filter((stop) => stop.point !== undefined).length }
   renderOverview(state)
   renderWarnings(state)
   renderTimeline(state)
@@ -1262,8 +1333,11 @@ interface AMapLike {
   Pixel: new (x: number, y: number) => unknown
   LngLat: new (lng: number, lat: number) => unknown
   Bounds: new (southWest: unknown, northEast: unknown) => unknown
-  Scale: new () => unknown
-  ToolBar: new () => unknown
+  /** JSAPI 2.0 插件按需加载入口（`plugin=` URL 参数不保证注册，故运行期探测）。 */
+  plugin?: (plugins: string[], callback: () => void) => void
+  /** 控件插件可选：2.0 下可能未注册（undefined）——必须特性探测，不得直接 new。 */
+  Scale?: new () => unknown
+  ToolBar?: new () => unknown
 }
 interface AMapMap {
   addControl(control: unknown): void

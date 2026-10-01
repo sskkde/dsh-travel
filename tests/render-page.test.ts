@@ -295,6 +295,30 @@ describe('travel_render_page 双 loader 端到端', () => {
     const csp = /<meta id="page-csp"[^>]+content="([^"]+)"/.exec(html)
     expect(csp?.[1]).toContain('https://webapi.amap.com')
     expect(csp?.[1]).toContain('https://unpkg.com')
+    // 回归：高德 JSAPI 2.0 实测所需的三类放行（缺一即 AMap.Scale 未注册/瓦片空白）
+    expect(csp?.[1]).toContain("style-src 'self' 'unsafe-inline'")
+    expect(csp?.[1]).toContain('https://restapi.amap.com') // JSONP 回调脚本
+    expect(csp?.[1]).toContain('https://jsapi.amap.com') // SDK 初始化握手
+    // connect-src 必须含瓦片域：JSAPI 2.0 对瓦片走 fetch 纹理上传，仅 img-src 放行会底图全白
+    const connectDirective = /connect-src([^;]*)/.exec(csp?.[1] ?? '')?.[1] ?? ''
+    expect(connectDirective).toContain('https://*.autonavi.com')
+    // script-src 绝不放开内联执行（只给 style 开口子）
+    const scriptDirective = /script-src([^;]*)/.exec(csp?.[1] ?? '')?.[1] ?? ''
+    expect(scriptDirective).not.toContain("'unsafe-inline'")
+    // script-src 必须含 'unsafe-eval'：JSAPI 2.0 用 new Function/eval 动态构建渲染
+    // 模块（DomRender），缺此关键字 → 'U.Module.DomRender is not a constructor' →
+    // 瓦片层不创建 → 底图全白（标记/版权/控件仍正常）。playwright 实测：保留 hash
+    // 并加 'unsafe-eval' 后 tileLayer≥1 且 tileImgs≥9，与无 CSP 对照一致。
+    expect(scriptDirective).toContain("'unsafe-eval'")
+    // amap 页 style-src 不得同时带 hash：CSP 规则下 hash 会让 'unsafe-inline' 失效
+    // （实测仍 blocked），故 amap 分支必须只用 'unsafe-inline' + 域名。
+    const styleDirective = /style-src([^;]*)/.exec(csp?.[1] ?? '')?.[1] ?? ''
+    expect(styleDirective).toContain("'unsafe-inline'")
+    expect(styleDirective).not.toContain('sha256-')
+    // 回归：amap 运行期/加载期失败 → 页内自带 Leaflet 降级（不再只剩静态列表）
+    // 注：页面 bundle 经 esbuild --minify（charset=ascii），中文串被转义，故断言 ASCII 标记。
+    expect(html).toContain('amapFallback')
+    expect(html).toContain('Leaflet/OSM')
     const dataBlock = /<script id="travel-data" type="application\/json">([\s\S]*?)<\/script>/.exec(html)
     expect(dataBlock, 'travel-data 数据块缺失').toBeTruthy()
     expect(dataBlock![1]).not.toContain('</script') // 数据 JSON 转义防闭合

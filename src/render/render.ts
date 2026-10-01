@@ -456,19 +456,45 @@ const FALLBACK_PAGE_BUNDLE = `(() => {
 
 const FALLBACK_PAGE_STYLES = `body{margin:0;font-family:sans-serif}.mobile-drawer{display:block}@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}`
 
-function pageCspPolicy(style: string, script: string): string {
+function pageCspPolicy(style: string, script: string, provider: 'amap' | 'leaflet'): string {
   const styleHash = createHash('sha256').update(style, 'utf8').digest('base64')
   const scriptHash = createHash('sha256').update(script, 'utf8').digest('base64')
   // SDK/地图域逐个列出；仅使用最终 bundle/style hash，不放开任意远端脚本或样式。
+  // 高德 JSAPI 2.0 实测还需三类放行，缺一即地图初始化失败（`AMap.Scale is not a
+  // constructor`）或瓦片空白：
+  //  1) script-src 需 restapi.amap.com——SDK 用 JSONP 回调脚本拉取 log/init；
+  //  2) style-src 需 'unsafe-inline'——SDK 运行期注入大量内联样式（控件/容器尺寸），
+  //     哈希覆盖不到；且 CSP 规定「源列表同时出现 hash 与 'unsafe-inline' 时
+  //     'unsafe-inline' 被忽略」——故 amap 页必须**去掉 style hash**，否则内联样式
+  //     仍被拦（实测 style-src 同时带两者 = 仍然 blocked）。script-src 保持无
+  //     'unsafe-inline'，不给页面脚本开后门；
+  //  3) img-src 需 *.autonavi.com——瓦片实际走 wprd0x.is.autonavi.com。
+  // connect-src 另需 jsapi.amap.com（SDK 初始化握手）与 *.autonavi.com。
+  //  4) connect-src 需 *.autonavi.com——实测 18 条 webrd0x.is.autonavi.com/appmaptile
+  //     请求「发起但返回 status=0、页面内零 tile <img>、.amap-layers 只剩 amap-markers」：
+  //     AMap JSAPI 2.0 的 DomRender 走 fetch/XHR 取瓦片字节（非 <img> 直插），
+  //     同一 URL 页面内 fetch no-cors 亦 Failed to fetch，而 <img> 加载 256x256 成功
+  //     ——即 img-src 正确、connect-src 缺 tile 域。缺此域 = 底图全白但标记/版权正常。
+  // 这些放行只在 amap 页生效：Leaflet 页保持原严格策略（运行时降级所需域已在
+  // amap 策略内，无需另开）。
+  const amap = provider === 'amap'
   return [
     "default-src 'none'",
     "base-uri 'none'",
     "object-src 'none'",
-    `script-src 'self' 'sha256-${scriptHash}' https://webapi.amap.com https://unpkg.com`,
-    `style-src 'self' 'sha256-${styleHash}' https://webapi.amap.com https://unpkg.com`,
+    amap
+      ? `script-src 'unsafe-eval' 'self' 'sha256-${scriptHash}' https://webapi.amap.com https://restapi.amap.com https://unpkg.com`
+      : `script-src 'self' 'sha256-${scriptHash}' https://unpkg.com`,
+    amap
+      ? "style-src 'self' 'unsafe-inline' https://webapi.amap.com https://unpkg.com"
+      : `style-src 'self' 'sha256-${styleHash}' https://unpkg.com`,
     "font-src 'self' data:",
-    "img-src 'self' data: blob: https://tile.openstreetmap.org https://webapi.amap.com",
-    "connect-src 'self' https://webapi.amap.com https://restapi.amap.com https://tile.openstreetmap.org",
+    amap
+      ? "img-src 'self' data: blob: https://tile.openstreetmap.org https://webapi.amap.com https://restapi.amap.com https://*.autonavi.com"
+      : "img-src 'self' data: blob: https://tile.openstreetmap.org",
+    amap
+      ? "connect-src 'self' https://webapi.amap.com https://restapi.amap.com https://jsapi.amap.com https://tile.openstreetmap.org https://*.autonavi.com"
+      : "connect-src 'self' https://tile.openstreetmap.org",
     "worker-src 'self' blob:",
   ].join('; ')
 }
@@ -510,7 +536,7 @@ export function renderWithTemplate(data: RenderPageData, template: string): stri
   const exportBlock = JSON.stringify(buildExportBundle(safeData)).replace(/</g, '\\u003c')
   const pageStyles = readPageAsset('page/styles.css', FALLBACK_PAGE_STYLES)
   const pageBundle = readPageAsset('page.bundle.js', FALLBACK_PAGE_BUNDLE)
-  const csp = pageCspPolicy(pageStyles, pageBundle)
+  const csp = pageCspPolicy(pageStyles, pageBundle, data.map?.provider === 'amap' ? 'amap' : 'leaflet')
   // 单遍替换：占位符一次扫描全部展开，注入内容若含占位符字面量也不会被二次展开。
   return template.replace(/__PAGE_TITLE__|__TRAVEL_DATA__|__TRAVEL_EXPORT__|__PAGE_STYLES__|__PAGE_BUNDLE__|__CSP_POLICY__/g, (match) => {
     if (match === '__TRAVEL_DATA__') return json

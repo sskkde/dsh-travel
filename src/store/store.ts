@@ -98,8 +98,17 @@ export interface ArtifactReadState<T> {
   data?: T
   meta?: ArtifactMeta
   /** stale/unknown 的具体原因。 */
-  staleReason?: 'hash_mismatch' | 'not_in_commit' | 'unaccounted' | 'unknown_version' | 'dependency_version'
+  staleReason?: 'hash_mismatch' | 'not_in_commit' | 'unaccounted' | 'unknown_version' | 'dependency_version' | 'non_json_artifact'
   compatibility?: 'current' | 'legacy' | 'unknown'
+}
+
+/**
+ * 非 JSON 工件（当前唯一：page.html）判定。
+ * 这类工件由渲染器直接写原文，从不经过 JSON 序列化与 manifest hash；状态读取只能
+ * 做存在性判断——对它调用 JSON.parse 会在已渲染计划上抛 `Unexpected token '<'`。
+ */
+export function isJsonArtifact(name: string): boolean {
+  return name.endsWith('.json')
 }
 
 /** 原子发布选项。 */
@@ -631,6 +640,14 @@ export class TravelStore {
   async readArtifactWithState<T>(planId: string, name: string): Promise<ArtifactReadState<T>> {
     assertSafePlanId(planId)
     assertSafeJsonName(name)
+    if (!isJsonArtifact(name)) {
+      // page.html 等原文工件：存在即如实回报，不做 JSON 解析与 hash 核对
+      // （unknown + non_json_artifact 表示「不可由 JSON 读取器核对」）。
+      const present = await this.fileExists(planId, name)
+      return present
+        ? { found: true, status: 'unknown', staleReason: 'non_json_artifact', compatibility: 'unknown' }
+        : { found: false, status: 'missing' }
+    }
     const meta = await this.readJson<ArtifactMeta>(planId, ARTIFACT_MANIFEST_FILE)
     const exists = await this.fileExists(planId, name)
     const data = exists ? await this.readJson<T>(planId, name) : undefined
