@@ -469,12 +469,13 @@ function pageCspPolicy(style: string, script: string, provider: 'amap' | 'leafle
   //     仍被拦（实测 style-src 同时带两者 = 仍然 blocked）。script-src 保持无
   //     'unsafe-inline'，不给页面脚本开后门；
   //  3) img-src 需 *.autonavi.com——瓦片实际走 wprd0x.is.autonavi.com。
-  // connect-src 另需 jsapi.amap.com（SDK 初始化握手）与 *.autonavi.com。
-  //  4) connect-src 需 *.autonavi.com——实测 18 条 webrd0x.is.autonavi.com/appmaptile
-  //     请求「发起但返回 status=0、页面内零 tile <img>、.amap-layers 只剩 amap-markers」：
-  //     AMap JSAPI 2.0 的 DomRender 走 fetch/XHR 取瓦片字节（非 <img> 直插），
-  //     同一 URL 页面内 fetch no-cors 亦 Failed to fetch，而 <img> 加载 256x256 成功
-  //     ——即 img-src 正确、connect-src 缺 tile 域。缺此域 = 底图全白但标记/版权正常。
+  //  4) connect-src 需 *.amap.com（而非逐个列举）——真机 GPU 走 WebGL 矢量瓦片：
+  //     控制台实测 `Fetch API cannot load https://jsapi-data4.amap.com/tile/…/pbf/…`
+  //     + 「解析飞天瓦片出错 Failed to fetch」。矢量瓦片域是 jsapi-data1..5.amap.com，
+  //     与握手用的 jsapi.amap.com 是**不同子域**，逐个列举必漏 → 底图全白。
+  //     *.amap.com 覆盖 webapi/restapi/jsapi/jsapi-data*/vdata，均为高德自有域。
+  //     注意：headless 无 GPU 会退回 *.autonavi.com 的 <img> 光栅瓦片，故 headless
+  //     探测绿 ≠ 真机绿——必须按真机矢量瓦片域放行（此坑由此而来）。
   // 这些放行只在 amap 页生效：Leaflet 页保持原严格策略（运行时降级所需域已在
   // amap 策略内，无需另开）。
   const amap = provider === 'amap'
@@ -490,10 +491,10 @@ function pageCspPolicy(style: string, script: string, provider: 'amap' | 'leafle
       : `style-src 'self' 'sha256-${styleHash}' https://unpkg.com`,
     "font-src 'self' data:",
     amap
-      ? "img-src 'self' data: blob: https://tile.openstreetmap.org https://webapi.amap.com https://restapi.amap.com https://*.autonavi.com"
+      ? "img-src 'self' data: blob: https://tile.openstreetmap.org https://*.amap.com https://webapi.amap.com https://restapi.amap.com https://*.autonavi.com"
       : "img-src 'self' data: blob: https://tile.openstreetmap.org",
     amap
-      ? "connect-src 'self' https://webapi.amap.com https://restapi.amap.com https://jsapi.amap.com https://tile.openstreetmap.org https://*.autonavi.com"
+      ? "connect-src 'self' https://*.amap.com https://webapi.amap.com https://restapi.amap.com https://jsapi.amap.com https://tile.openstreetmap.org https://*.autonavi.com"
       : "connect-src 'self' https://tile.openstreetmap.org",
     "worker-src 'self' blob:",
   ].join('; ')

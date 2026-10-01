@@ -302,6 +302,13 @@ describe('travel_render_page 双 loader 端到端', () => {
     // connect-src 必须含瓦片域：JSAPI 2.0 对瓦片走 fetch 纹理上传，仅 img-src 放行会底图全白
     const connectDirective = /connect-src([^;]*)/.exec(csp?.[1] ?? '')?.[1] ?? ''
     expect(connectDirective).toContain('https://*.autonavi.com')
+    // connect-src 必须含 *.amap.com：真机 GPU 走 WebGL 矢量瓦片，取
+    // https://jsapi-data1..5.amap.com/tile/…/pbf/…（与握手用 jsapi.amap.com 不同子域）。
+    // 只列 jsapi.amap.com 会漏掉 jsapi-data* →「解析飞天瓦片出错 Failed to fetch」→ 底图全白。
+    // headless 无 GPU 退回 *.autonavi.com 光栅 <img>，故 headless 绿 ≠ 真机绿。
+    expect(connectDirective).toContain('https://*.amap.com')
+    const imgDirective = /img-src([^;]*)/.exec(csp?.[1] ?? '')?.[1] ?? ''
+    expect(imgDirective).toContain('https://*.amap.com')
     // script-src 绝不放开内联执行（只给 style 开口子）
     const scriptDirective = /script-src([^;]*)/.exec(csp?.[1] ?? '')?.[1] ?? ''
     expect(scriptDirective).not.toContain("'unsafe-inline'")
