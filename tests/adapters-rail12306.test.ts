@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import {
   Rail12306Adapter, McpStreamClient, READ_ONLY_TOOLS, assertReadOnly,
+  DEFAULT_RAIL_MCP_URL, RAIL_MCP_URL_ENV,
   durationToMinutes, isReadOnlyTool, normalizePrices, normalizeTrain, seatTags,
   type FetchLike,
 } from '../src/adapters/rail12306.js'
@@ -19,6 +20,26 @@ function fixtureResult(name: string): unknown {
   const f = JSON.parse(readFileSync(path.join(FIX, name), 'utf8'))
   return f.result
 }
+
+describe('MCP URL 环境覆盖（deploy.md §2.4）', () => {
+  it('env 覆盖默认端点，显式 URL/MCP 优先，未设 env 时回落默认值', () => {
+    const previous = process.env[RAIL_MCP_URL_ENV]
+    const envUrl = 'http://env.example.invalid:8123/mcp'
+    const explicitUrl = 'http://explicit.example.invalid:8123/mcp'
+    try {
+      process.env[RAIL_MCP_URL_ENV] = envUrl
+      expect(new Rail12306Adapter().mcp.url).toBe(envUrl)
+      expect(new McpStreamClient({ url: explicitUrl }).url).toBe(explicitUrl)
+      expect(new Rail12306Adapter({ mcp: new McpStreamClient({ url: explicitUrl }) }).mcp.url).toBe(explicitUrl)
+
+      delete process.env[RAIL_MCP_URL_ENV]
+      expect(new Rail12306Adapter().mcp.url).toBe(DEFAULT_RAIL_MCP_URL)
+    } finally {
+      if (previous === undefined) delete process.env[RAIL_MCP_URL_ENV]
+      else process.env[RAIL_MCP_URL_ENV] = previous
+    }
+  })
+})
 
 describe('只读白名单红线（deploy.md §2.1）', () => {
   it('白名单工具全部放行，且无任何交易类方法', () => {

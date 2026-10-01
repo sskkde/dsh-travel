@@ -66,7 +66,10 @@ import {
   TRAVEL_METRICS_PATH, TRAVEL_METRICS_CLOAK_CLEAR_PATH,
 } from './metrics/usage.js'
 import { makeTravelKeyStatusHandler, TRAVEL_KEY_STATUS_PATH } from './metrics/key-status.js'
-import { registerTravelSettings } from './settings/schema.js'
+import { makeTravelChannelStatusHandler, TRAVEL_CHANNEL_STATUS_PATH } from './metrics/channel-status.js'
+import { Config, configureTravelSettings, holdTravelConfig, type TravelPluginConfig } from './settings/schema.js'
+
+export { Config }
 import { CompanionSupervisor, type CompanionServiceName } from './lifecycle/companion-supervisor.js'
 
 export const name = 'dsh-travel'
@@ -116,7 +119,8 @@ export function createCompanionDisposer(deps: {
   }
 }
 
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: TravelPluginConfig): void {
+  holdTravelConfig(config)
   // 契约与状态层三工具（store 根：explicit → env DSH_TRAVEL_ROOT → cwd）
   const store = new TravelStore(resolveTravelRoot())
   ctx.tools.register(createTravelIntakeTool(store))
@@ -157,9 +161,10 @@ export function apply(ctx: Context): void {
   // socialSearchViaWeb 适配 SearchLike）——flight：wendao→flyai→搜索；rail12306
   // 不可用时 searchTrains 互备链同构复用。flyai 二进制缺失时 available()=false
   // 如实降级记账，不影响其余档位。
+  const flyai = new FlyaiAdapter()
   const intercity = new IntercityAdapter({
     wendao,
-    flyai: new FlyaiAdapter(),
+    flyai,
     search: { name: 'web-l0', search: socialSearchViaWeb(ctx) },
   })
   const openMeteo = new OpenMeteoAdapter()
@@ -273,7 +278,7 @@ export function apply(ctx: Context): void {
   })
 
   // M3.6 渠道 Key 配置状态只读同源路由（exact）：GET /travel-key-status →
-  // { ns:'travel', keys:{ id:{configured:boolean,channelEnabled:boolean} } }——每 id
+  // { ns:'dsh-travel', keys:{ id:{configured:boolean,channelEnabled:boolean} } }——每 id
   // 用 makeKeyEnv(ctx) 请求时热构造，分离凭据事实与渠道开关
   // + resolveKey(id, env) 全链判定（settings→credentials→env，与运行时工具同口径）。
   // 防护形态同 metrics（非 GET → 405；非本机回环/白名单 → 403）；响应零 secret。
@@ -281,6 +286,31 @@ export function apply(ctx: Context): void {
     kind: 'exact',
     path: TRAVEL_KEY_STATUS_PATH,
     handler: makeTravelKeyStatusHandler(ctx, { allowSelfOrigin: true }), // 只读布尔面，同上
+  })
+
+  // FR-3~FR-7 三层渠道状态只读路由：静态 config/readiness + 显式 probe runtime。
+  // 传入 apply() 内既有实例，禁止为观测面重新构造适配器；缺省请求不调用
+  // available()/ping()，因此不会触发任何外部探活或配额消耗。
+  server.register({
+    kind: 'exact',
+    path: TRAVEL_CHANNEL_STATUS_PATH,
+    handler: makeTravelChannelStatusHandler(ctx, {
+      allowSelfOrigin: true,
+      adapters: {
+        rail,
+        amap,
+        wendao,
+        intercity,
+        flyai,
+        didi,
+        xhs,
+        playwright,
+        tencent,
+        openMeteo,
+        zhihu,
+      },
+      supervisor,
+    }),
   })
 
   // M3.5 生命周期收尾（ctx.effect disposer）：插件卸载/重载时先 supervisor.stopAll()
@@ -298,8 +328,6 @@ export function apply(ctx: Context): void {
     ],
   }), 'dsh-travel: companion supervisor 停止 + MCP 会话收尾')
 
-  // W6 设置页 v1：settings 命名空间 travel 三组注册（§10.1；ADR-12 settings 位
-  // 唯一真源=src/adapters/env.ts makeKeyEnv——W3/W4/W5 工具执行时热读取）。
-  // settings 服务缺省时静默跳过（Key 链回落 credentials→env，行为不变）。
-  registerTravelSettings(ctx)
+  // dsh-settings 0.1.7 按 loader entry id 暴露自动配置表单；缺服务时静默跳过。
+  configureTravelSettings(ctx)
 }

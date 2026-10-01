@@ -55,8 +55,12 @@ export const defaultHttpCall: HttpCallFn = (url, init, signal) => {
 
 // ────────────────────────── 常量与原始响应形态 ──────────────────────────
 
-const H5GW_BASE = 'https://h5gw.map.qq.com'      // 体验通道（零 key）
-const WS_BASE = 'https://apis.map.qq.com'        // 正式 key 通道
+/** 腾讯地图体验通道根端点（零 key；状态页/适配器共用）。 */
+export const TENCENT_H5GW_BASE = 'https://h5gw.map.qq.com'
+/** 腾讯地图正式 WebService 根端点（TMAP key；状态页/适配器共用）。 */
+export const TENCENT_WS_BASE = 'https://apis.map.qq.com'
+const H5GW_BASE = TENCENT_H5GW_BASE
+const WS_BASE = TENCENT_WS_BASE
 const RICH_ADDED_FIELDS = 'star_level,avg_price,opening_hours'
 const DEFAULT_TIMEOUT_MS = 20_000
 const A2A_TIMEOUT_MS = 120_000

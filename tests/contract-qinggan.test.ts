@@ -9,18 +9,15 @@
  * - settings 默认值（didaHotel off、三额度默认）且热读生效
  * - 类型 npm run typecheck 绿
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Context, Service } from '@deepseek-ai/cordis'
-import { FileSettingsProvider as FSP } from '@deepseek-ai/dsh-settings-file'
 import { TravelStore } from '../src/store/store.js'
 import { runIntake } from '../src/tools/intake.js'
 import { makeKeyEnv } from '../src/adapters/env.js'
 import {
-  TRAVEL_CHANNELS_DEFAULT, TRAVEL_RESEARCH_DEFAULT, TRAVEL_SETTINGS_NS,
-  travelSettingsSchema, type TravelSettings,
+  Config, TRAVEL_CHANNELS_DEFAULT, TRAVEL_RESEARCH_DEFAULT, type TravelSettings,
 } from '../src/settings/schema.js'
 import {
   CONTENT_STATUSES, RESEARCH_KEYWORDS_MAX, RESEARCH_KEYWORDS_MAX_CHARS,
@@ -253,22 +250,12 @@ describe('T1 settings 契约：didaHotel off、研究额度默认、热读生效
     expect(TRAVEL_RESEARCH_DEFAULT.deep.maxContentCharsPerItem).toBe(100_000)
   })
 
-  it('schema 注册解析默认（文档缺失回落默认，与 settings-schema.test 同装配路径）', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'dsh-travel-schema-qinggan-'))
-    try {
-      const path = join(dir, 'settings.json')
-      writeFileSync(path, '{}')
-      const ctx = new Context()
-      const settings = new FSP(ctx, { path, watch: false })
-      for await (const _phase of settings[Service.init]()) { /* 装载 */ }
-      const resolved = settings.register(TRAVEL_SETTINGS_NS, travelSettingsSchema).get()
-      expect(resolved.channels.fr3.didaHotel).toBe(false)
-      expect(resolved.research.deep.maxRoundsPerPlan).toBe(16)
-      expect(resolved.research.deep.maxContentItemsPerPlan).toBe(40)
-      expect(resolved.research.deep.maxContentCharsPerItem).toBe(100_000)
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
+  it('loader Config 缺省解析为默认（与 settings-schema.test 共用 Config 快照路径）', () => {
+    const config = Config({})
+    expect(config.channels.get().fr3.didaHotel).toBe(false)
+    expect(config.research.get().deep.maxRoundsPerPlan).toBe(16)
+    expect(config.research.get().deep.maxContentItemsPerPlan).toBe(40)
+    expect(config.research.get().deep.maxContentCharsPerItem).toBe(100_000)
   })
 
   it('makeKeyEnv 热读：readSettings("research.deep.*") 返回当前快照字符串', () => {

@@ -9,18 +9,17 @@
  * - advanced：原 Config 收敛的高级参数（预算/频控/routePrefix/socialDepth 等）
  *
  * 缺省值 = §10.1 表的字面值（fr4.cityDidi 与 fr3.xhsCloak 默认 off；其余默认 on）。
- * 注册为节点半 effect：`ctx.inject(['settings'], …)`（settings 服务缺省时插件照常
- * 运行，settings 位等效“未配置”，credentials→env 两段兜底——与 base.ts 契约一致）。
+ * 宿主 Config 逐字段 volatile，热读取通过 config 字段的 get() 完成。
  *
- * 读取约定：makeKeyEnv（src/adapters/env.ts）以本文件导出的已注册命名空间快照为
- * settings 位唯一真源（W3/W4/W5 工具热读取走它）。
+ * 读取约定：makeKeyEnv（src/adapters/env.ts）以当前 Config 快照为 settings 位真源；
+ * Config 缺省时仍由对应子 schema 提供默认值。
  */
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
-import { settingsNamespace, type SettingsNamespace, type SettingsScope } from '@deepseek-ai/dsh-settings'
 
-/** 命名空间 id（client 半注册卡 key / settingsScope.bind 同用此字面量）。 */
-export const TRAVEL_SETTINGS_NS: SettingsNamespace = settingsNamespace('travel')
+/** 命名空间 id 与宿主 loader entry id 一致。 */
+export const TRAVEL_SETTINGS_NS = 'dsh-travel'
 
 // ────────────────────────── 类型（§10.1 三组） ──────────────────────────
 
@@ -133,7 +132,7 @@ export interface TravelAdvancedSettings {
   companionServices: TravelCompanionServices
 }
 
-/** settings 命名空间 travel 的完整解析值。 */
+/** dsh-travel 配置的完整解析值。 */
 export interface TravelSettings {
   channels: TravelChannelMatrix
   keys: TravelKeySet
@@ -251,7 +250,7 @@ export const travelChannelsSchema = z.object({
 /** keys 组：渠道 Key（role('secret') 自动脱敏；未配置=键缺失）。
  *  用 dict（而非固定 object）承载：secret 字段可不出现（=未配置），实体字段由
  *  TravelKeySet 聚焦声明；redact 走 dict 条目级剥离并只在有值时登记 sidecar。 */
-export const travelKeysSchema = z.dict(z.string().role('secret')).default({})
+export const travelKeysSchema: Schemastery = z.dict(z.string().role('secret')).default({})
 
 /** advanced 组：高级配置（字段级缺省，部分覆盖回落默认）。 */
 export const travelAdvancedSchema = z.object({
@@ -284,37 +283,56 @@ export const travelResearchSchema = z.object({
   }).default(TRAVEL_RESEARCH_DEFAULT.deep),
 }).default(TRAVEL_RESEARCH_DEFAULT)
 
-/** 命名空间 travel 的完整 schema（settings.register 使用；applies='live' 即保存即生效）。 */
-export const travelSettingsSchema = z.object({
+/** 四组设置的兼容解析 schema，供测试及 snapshot 保持同一默认值表。 */
+export const travelSettingsSchema: Schemastery = z.object({
   channels: travelChannelsSchema,
   keys: travelKeysSchema,
   advanced: travelAdvancedSchema,
   research: travelResearchSchema,
 })
 
-// ────────────────────────── 注册与快照（ADR-12 settings 位唯一真源） ──────────────────────────
+/** dsh-travel loader Config：字段均 volatile，由宿主在写入时更新活引用。 */
+export const Config: Schemastery = z.object({
+  channels: travelChannelsSchema.volatile(),
+  keys: travelKeysSchema.volatile(),
+  advanced: travelAdvancedSchema.volatile(),
+  research: travelResearchSchema.volatile(),
+})
 
-let registeredScope: SettingsScope<TravelSettings> | undefined
+interface LiveConfigField<T> {
+  get(): T
+}
+
+export interface TravelPluginConfig {
+  channels: LiveConfigField<TravelChannelMatrix>
+  keys: LiveConfigField<TravelKeySet>
+  advanced: LiveConfigField<TravelAdvancedSettings>
+  research: LiveConfigField<TravelResearchSettings>
+}
+let activeConfig: TravelPluginConfig | undefined
 
 /**
- * 注册 settings 命名空间 travel（节点半，apply() 调用）。
- * settings 服务缺省时静默跳过（插件其余功能照常）；服务在场时注册为插件 fiber
- * effect（插件卸载自动注销）并把 scope 交给模块级快照访问器。
+ * Config 的字段引用由 apply() 持有；设置服务存在时显式启用自动表单。
+ * inject 以服务存在为条件，缺少 settings 不影响插件其余功能。
  */
-export function registerTravelSettings(ctx: Context): void {
-  ctx.inject(['settings'], (settingsCtx) => {
-    registeredScope = settingsCtx.settings.register(TRAVEL_SETTINGS_NS, travelSettingsSchema, {
-      // §10.1「保存后立即生效（无需重启）」：静态部署参数随保存生效
-      applies: 'live',
-    })
+export function configureTravelSettings(ctx: Context): void {
+  ctx.inject(['settings'], () => {
+    ctx.settings.configure({ auto: true }, ctx.fiber)
   })
 }
 
-/**
- * 已注册命名空间的解析快照（热读取）。
- * - 未注册/服务缺省 → undefined（等价「未配置」，Key 链回落 credentials→env）
- * - settings 空间本身只读拉取；写入经设置页/update 路径，本快照天然热跟随
- */
+/** 从 dsh-travel Config 的活引用投影完整热快照。 */
 export function travelSettingsSnapshot(): TravelSettings | undefined {
-  return registeredScope?.get()
+  if (!activeConfig) return undefined
+  return {
+    channels: activeConfig.channels.get(),
+    keys: activeConfig.keys.get(),
+    advanced: activeConfig.advanced.get(),
+    research: activeConfig.research.get(),
+  }
+}
+
+/** 由插件入口设置当前 loader Config；导出供 apply 调用。 */
+export function holdTravelConfig(config: TravelPluginConfig): void {
+  activeConfig = config
 }

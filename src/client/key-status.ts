@@ -2,7 +2,7 @@
  * 渠道 Key 配置状态远程判定（M3.6：设置页「已配置」徽章补 credentials 层）。
  *
  * 宿主侧新增只读同源 `GET /travel-key-status`（src/metrics/key-status.ts）返回
- * `{ ns:'travel', keys:{ id:{configured:boolean,channelEnabled:boolean} } }`——每 id 按
+ * `{ ns:'dsh-travel', keys:{ id:{configured:boolean,channelEnabled:boolean} } }`——每 id 按
  * 运行时 resolveKey 全链（settings→credentials→env）判定，并单独投影渠道开关。
  * 本模块把该判定带进设置卡：
  * - 类型 + 形状守卫 fetch（新响应要求双面布尔；旧 `{keys:{id:boolean}}` 仍兼容，其他响应/失败静默

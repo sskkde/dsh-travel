@@ -7,7 +7,7 @@
  * execute 返回对象字面量（展开投影，避免 any/断言污染）。
  */
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type { Slots } from '../models/types.js'
 
 /** 三个状态/槽位工具统一超时（§6 表：10s）。 */

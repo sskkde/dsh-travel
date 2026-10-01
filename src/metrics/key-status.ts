@@ -9,7 +9,7 @@
  *
  * 形态与 /travel-metrics（usage.ts makeTravelMetricsHandler）同构：
  * - exact GET `/travel-key-status` → JSON
- *   `{ ns:'travel', keys:{ id:{configured:boolean,channelEnabled:boolean} } }`；
+ *   `{ ns:'dsh-travel', keys:{ id:{configured:boolean,channelEnabled:boolean} } }`；
  * - 每 id 用 makeKeyEnv(ctx)**请求时热构造** + resolveKey(id, env) 全链判定
  *   （覆盖 settings→credentials→env；与运行时工具同口径），并单独投影对应渠道开关；
  * - 响应零 secret（只布尔；值绝不回显）；
@@ -23,8 +23,8 @@ import type { TravelSettings } from '../settings/schema.js'
 
 /** key-status 路由 path（exact；client 半以同字面量镜像）。 */
 export const TRAVEL_KEY_STATUS_PATH = '/travel-key-status'
-/** 响应 ns（= settings 命名空间 travel）。 */
-export const TRAVEL_KEY_STATUS_NS = 'travel'
+/** 响应 ns（= loader entry / settings 命名空间 dsh-travel）。 */
+export const TRAVEL_KEY_STATUS_NS = 'dsh-travel'
 
 /**
  * 判定表（与 fields.ts KEY_FIELDS / CREDENTIAL_REF_MAP 同名标识符集合一致；

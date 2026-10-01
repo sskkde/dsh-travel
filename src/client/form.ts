@@ -1,13 +1,10 @@
 /**
- * 设置卡控制器（settingsScope 读写 / save·discard / NFR-10 冗余校验软警示）。
+ * 设置卡控制器（ConfigForm 读写 / save·discard / NFR-10 冗余校验软警示）。
  *
  * 数据流（与官方设置表面同构）：
- * - 读：`scope`（settingsScope.bind({namespace:'travel'})）持解析快照（channels/
- *   advanced）；Key 的「已配置」状态取自共享 describe mirror 的 secrets 边车
- *   （secret 值从不回显，只给 path+set 标志）。
- * - 写：`api.settings.update`（**merge 语义**：只带用户改动的字段，未提及的
- *   既有值——含 secret——原样保留）＋ `api.settings.mutate`（unset 路径操作，
- *   删除 Key/恢复默认）。revision 围栏逐写刷新，防陈旧写被拒。
+ * - 读：ConfigFormController 的 getSnapshot/subscribe 持有解析快照；Key 的「已配置」
+ *   状态取自共享 describe mirror 的 secrets 边车（secret 值从不回显，只给 path+set 标志）。
+ * - 写：ConfigFormController.mutate 执行原子路径操作，内部通过 ctx.remote.settings 写入。
  * - 保存：把草稿按三组聚合成 ≤2 次 wire 调用；先跑 NFR-10 冗余校验（软：
  *   任一组启用渠道 <2 只给警示，不拦截保存——弹窗化属 M2.8 v2）。
  *
@@ -15,10 +12,10 @@
  * 删除点 `×` 即 unset 该字段。明文永不出现在任何序列化面（宿主侧
  * describe 已 redact；本控制器也无保留）。
  */
-import type { SnapshotStore, SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
-import type { RpcResult, SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-client-connection/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ConfigForm, SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsNamespaceView, SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ADVANCED_FIELDS, CHANNEL_FIELDS, CHANNEL_GROUPS, COMPANION_SERVICE_IDS, KEY_FIELDS,
   COMPANION_SERVICES_DEFAULT,
@@ -28,7 +25,7 @@ import {
 } from './fields'
 
 /** settings 命名空间（与 node 侧注册 + 卡 key 同值）。 */
-export const TRAVEL_SETTINGS_NAMESPACE = 'travel'
+export const TRAVEL_SETTINGS_NAMESPACE = 'dsh-travel'
 
 /** 草稿寻址路径：channels.<group>.<field> / keys.<id> / advanced.<id>。 */
 export type TravelEditPath =
@@ -142,8 +139,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 /** 从 describe mirror 的 secrets 边车读取某 Key 的配置标志。 */
 function keyConfigured(viewNamespaces: readonly SettingsNamespaceView[] | undefined, id: string): boolean {
-  const ns = viewNamespaces?.find((view) => String(view.ns) === TRAVEL_SETTINGS_NAMESPACE)
-  return ns?.secrets?.some((secret) => secret.path.length === 2 && secret.path[0] === 'keys' && secret.path[1] === id && secret.set) === true
+  const ns = viewNamespaces?.find((view) => view.ns === TRAVEL_SETTINGS_NAMESPACE)
+  return ns?.secrets.some((secret) => secret.path.length === 2 && secret.path[0] === 'keys' && secret.path[1] === id && secret.set) === true
 }
 
 /** 从嵌套值按路径取原始用户覆盖标志（user 层 hasOwnProperty）。 */
@@ -165,25 +162,14 @@ function textOf(value: unknown): string {
 }
 
 /**
- * settings wire 写面（结构对齐 IApiClient['settings']，payload-direct——
- * dsh-client-connection fetch/client 的绑定签名；rpcId 由 carrier 层填充）。
- */
-export interface TravelSettingsWire {
-  update(payload: { ns: string; patch: object; expectedRevision?: number }): Promise<{ result: RpcResult<SettingsNamespaceView> }>
-  mutate(payload: { ns: string; ops: readonly SettingsPathOpView[]; expectedRevision?: number }): Promise<{ result: RpcResult<SettingsNamespaceView> }>
-}
-
-/**
- * 控制器生命周期与整个卡注册同纤维：构造即订阅 scope+mirror，
- * 卡注销时（slots.inject disposer）必须调用 dispose()。
+ * The settings provider owns this shared form; the editor owns only its listeners.
  */
 export class TravelSettingsCardController {
-  private readonly scope: SettingsScope<TravelSettings>
+  private readonly form: ConfigForm<TravelSettings>
   private readonly mirror: SettingsDescribeFace
-  private readonly api: TravelSettingsWire
   private readonly staged = new Map<string, StagedEdit>()
   private readonly listeners = new Set<() => void>()
-  private readonly disposeScope: () => void
+  private readonly disposeForm: () => void
   private readonly disposeMirror: () => void
   private disposed = false
   private saving = false
@@ -191,11 +177,10 @@ export class TravelSettingsCardController {
   private failedReason: string | undefined
   private redundancyModal = false
 
-  constructor(scope: SettingsScope<TravelSettings>, mirror: SettingsDescribeFace, api: TravelSettingsWire) {
-    this.scope = scope
+  constructor(form: ConfigForm<TravelSettings>, mirror: SettingsDescribeFace) {
+    this.form = form
     this.mirror = mirror
-    this.api = api
-    this.disposeScope = scope.subscribe(() => this.publish())
+    this.disposeForm = form.subscribe(() => this.publish())
     this.disposeMirror = mirror.subscribe(() => this.publish())
   }
 
@@ -203,7 +188,7 @@ export class TravelSettingsCardController {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    this.disposeScope()
+    this.disposeForm()
     this.disposeMirror()
     this.listeners.clear()
   }
@@ -255,7 +240,7 @@ export class TravelSettingsCardController {
   }
 
   private snapshotOf(): { value?: TravelSettings; user?: unknown; revision?: number; status: string; writable: boolean } {
-    const snapshot = this.scope.getSnapshot()
+    const snapshot = this.form.getSnapshot()
     return {
       value: snapshot.value,
       user: snapshot.user,
@@ -373,73 +358,49 @@ export class TravelSettingsCardController {
 
   // ── 保存 ──
 
-  /** 草稿 → 组聚合 patch 与 unset 操作。 */
-  private planWrites(): { patch: PlannedPatch; unsets: Array<{ op: 'unset'; path: string[] }>; invalid: boolean } {
-    const channelsPatch: Record<string, Record<string, unknown>> = {}
-    const keysPatch: Record<string, unknown> = {}
-    const advancedPatch: Record<string, unknown> = {}
-    const unsets: Array<{ op: 'unset'; path: string[] }> = []
+  /** 草稿转换为 ConfigForm 支持的原子路径操作。 */
+  private planWrites(): { ops: SettingsPathOpView[]; invalid: boolean } {
+    const ops: SettingsPathOpView[] = []
     let invalid = false
     for (const [path, edit] of this.staged) {
+      const parts = path.split('.')
       if (path.startsWith('channels.')) {
-        const [, group, field] = path.split('.')
+        const [, group, field] = parts
         if (edit.kind === 'set' && typeof edit.value === 'boolean') {
-          ;(channelsPatch[group] ??= {})[field] = edit.value
-        } else {
-          unsets.push({ op: 'unset', path: ['channels', group, field] })
+          ops.push({ op: 'set', path: ['channels', group, field], value: edit.value })
         }
       } else if (path.startsWith('keys.')) {
-        const id = path.slice('keys.'.length)
-        if (edit.kind === 'clear') {
-          unsets.push({ op: 'unset', path: ['keys', id] })
-        } else if (typeof edit.value === 'string' && edit.value.trim() !== '') {
-          // 只写非空新值；留空=不改（secret write-only）
-          keysPatch[id] = edit.value.trim()
+        const id = parts[1]
+        if (edit.kind === 'clear') ops.push({ op: 'unset', path: ['keys', id] })
+        else if (typeof edit.value === 'string' && edit.value.trim() !== '') {
+          // Secret 值只在用户明确提交的新值时写入；从不读取或回显。
+          ops.push({ op: 'set', path: ['keys', id], value: edit.value.trim() })
         }
       } else if (path.startsWith('advanced.')) {
         const rest = path.slice('advanced.'.length)
-        // M3.5 伴随服务块（专用写面：companionAutostart 平铺布尔 + companionServices 嵌套对象）
-        if (rest === 'companionAutostart') {
-          if (edit.kind === 'set' && typeof edit.value === 'boolean') advancedPatch[rest] = edit.value
-          else unsets.push({ op: 'unset', path: ['advanced', rest] })
-        } else if (rest.startsWith('companionServices.')) {
-          const serviceId = rest.slice('companionServices.'.length)
-          if (edit.kind === 'set' && typeof edit.value === 'boolean') {
-            const bucket = (advancedPatch.companionServices ??= {}) as Record<string, boolean>
-            bucket[serviceId] = edit.value
-          } else if (edit.kind === 'clear') {
-            unsets.push({ op: 'unset', path: ['advanced', 'companionServices', serviceId] })
-          }
-        } else {
-          const def = ADVANCED_FIELDS.find((item) => item.id === rest)
-          if (edit.kind === 'set') {
-            const parsed = typeof edit.value === 'string' && def !== undefined ? parseDraft(def, edit.value) : edit.value
-            if (parsed === undefined) invalid = true
-            else advancedPatch[rest] = parsed
-          } else {
-            unsets.push({ op: 'unset', path: ['advanced', rest] })
-          }
+        const fieldPath = ['advanced', ...rest.split('.')]
+        if (edit.kind === 'clear') {
+          ops.push({ op: 'unset', path: fieldPath })
+          continue
         }
+        const def = ADVANCED_FIELDS.find((item) => item.id === rest)
+        const parsed = typeof edit.value === 'string' && def !== undefined ? parseDraft(def, edit.value) : edit.value
+        if (typeof parsed !== 'boolean' && typeof parsed !== 'number' && typeof parsed !== 'string') {
+          invalid = true
+          continue
+        }
+        ops.push({ op: 'set', path: fieldPath, value: parsed })
       }
     }
-    const patch: PlannedPatch = {}
-    if (Object.keys(channelsPatch).length > 0) patch.channels = channelsPatch
-    if (Object.keys(keysPatch).length > 0) patch.keys = keysPatch
-    if (Object.keys(advancedPatch).length > 0) patch.advanced = advancedPatch
-    return { patch, unsets, invalid }
+    return { ops, invalid }
   }
 
-  /**
-   * 写全部草稿（组聚合 ≤2 次 wire 调用），NFR-10 只警示不拦截（软校验）。
-   * 落地的字段清草稿；未落地保留供修正。UI 动作走 void 包装；测试可直接 await。
-   */
+  /** Save edits atomically; the provider carries writes over ctx.remote.settings. */
   async save(opts: { force?: boolean } = {}): Promise<void> {
     const snapshot = this.snapshotOf()
     if (!snapshot.writable || this.saving || snapshot.status !== 'ready') return
     const plan = this.planWrites()
-    if (this.staged.size === 0 || plan.invalid || (!hasPatch(plan.patch) && plan.unsets.length === 0)) return
-    // NFR-10 弹窗化（v2）：冗余不足 → 拦截并弹确认（「仍要保存」显式强制越过）；
-    // 硬校验（字段 invalid）不受 force 影响。
+    if (this.staged.size === 0 || plan.invalid || plan.ops.length === 0) return
     if (!opts.force && hasInsufficientRedundancy(this.effectiveChannels())) {
       this.redundancyModal = true
       this.publish()
@@ -450,41 +411,12 @@ export class TravelSettingsCardController {
     this.failed = false
     this.failedReason = undefined
     this.publish()
-    const landed = new Set<string>()
     try {
-      let revision: number | undefined = snapshot.revision
-      let failedReason: string | undefined
-      if (hasPatch(plan.patch)) {
-        const response = await this.api.update({
-          ns: TRAVEL_SETTINGS_NAMESPACE,
-          patch: plan.patch,
-          ...(revision === undefined ? {} : { expectedRevision: revision }),
-        })
-        if (!response.result.ok) {
-          failedReason = response.result.error.message
-        } else {
-          revision = response.result.value.revision
-          for (const path of this.staged.keys()) {
-            if (path.startsWith('channels.') || path.startsWith('advanced.')) landed.add(path)
-          }
-          for (const id of Object.keys(plan.patch.keys ?? {})) landed.add(`keys.${id}`)
-        }
-      }
-      if (plan.unsets.length > 0 && failedReason === undefined) {
-        const response = await this.api.mutate({
-          ns: TRAVEL_SETTINGS_NAMESPACE,
-          ops: plan.unsets,
-          ...(revision === undefined ? {} : { expectedRevision: revision }),
-        })
-        if (!response.result.ok) failedReason = response.result.error.message
-        else for (const op of plan.unsets) landed.add(op.path.join('.'))
-      }
-      if (failedReason !== undefined) this.failedReason = failedReason
+      const written = await this.form.mutate(plan.ops, snapshot.revision)
+      if (written) this.staged.clear()
+      else this.failedReason = 'Host did not accept the settings update.'
     } catch (error) {
       this.failedReason = error instanceof Error ? error.message : String(error)
-    }
-    for (const path of [...this.staged.keys()]) {
-      if (landed.has(path)) this.staged.delete(path)
     }
     this.saving = false
     this.failed = this.staged.size > 0
@@ -494,15 +426,4 @@ export class TravelSettingsCardController {
   private publish(): void {
     for (const listener of this.listeners) listener()
   }
-}
-
-/** 一组拟保存字段（update merge patch 的分组形状）。 */
-interface PlannedPatch {
-  channels?: Record<string, Record<string, unknown>>
-  keys?: Record<string, unknown>
-  advanced?: Record<string, unknown>
-}
-
-function hasPatch(patch: PlannedPatch): boolean {
-  return patch.channels !== undefined || patch.keys !== undefined || patch.advanced !== undefined
 }

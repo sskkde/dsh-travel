@@ -216,10 +216,16 @@ async function verifyIsolated3081(page, pageErrors) {
   const baseUrl = process.env.SETTINGS_COLLAPSE_URL ?? 'http://127.0.0.1:3081/'
   const errorStart = pageErrors.length
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  await page.getByRole('button', { name: 'Plugins', exact: true }).click()
+  const settingsButton = page.getByRole('button', { name: 'Settings', exact: true })
+  await settingsButton.waitFor({ state: 'visible', timeout: 30000 })
+  // The token redirect can finish before the app's browser fibers hydrate.
+  await page.waitForTimeout(1000)
+  await settingsButton.click()
+  await page.waitForFunction(() => document.querySelector('button[aria-label="Settings"]')?.getAttribute('aria-expanded') === 'true', undefined, { timeout: 10000 })
+  await page.getByRole('button', { name: /Travel Planner|旅行规划插件/ }).click()
   const card = page.locator('.dsh-travel-card')
   await card.waitFor({ state: 'visible', timeout: 30000 })
+  pass('settings.section dsh-travel rendered', (await card.innerText()).slice(0, 240))
   assert(pageErrors.length === errorStart, `3081 browser page errors: ${pageErrors.slice(errorStart).join('; ')}`)
 
   const topGroups = card.locator('details.dsh-travel-group')
@@ -305,6 +311,33 @@ async function verifyIsolated3081(page, pageErrors) {
   const badgeOkCount = await keysGroup.locator('.dsh-travel-badgeOk').count()
   assert(badgeOkCount > 0, `3081 keys group showed no configured badges (credentials-layer keys must display configured): badgeOk=${badgeOkCount}`)
   pass('3081 credentials-layer keys display as configured', `badgeOk=${badgeOkCount}`)
+
+  // 渠道三层状态（config/readiness/runtime）：真实页面拉 /travel-channel-status。
+  // 缺省（未点检测）必须显示「未检测」而不是「不可达」——未探 ≠ 故障，这是本面板的核心语义。
+  const channelsGroup = topGroups.nth(0)
+  const channelsGroupSummary = topSummaries.nth(0)
+  if (await channelsGroup.evaluate((element) => element.open) === false) {
+    await channelsGroupSummary.click()
+  }
+  const detectButton = channelsGroup.locator('button', { hasText: /Check again|Check|检测|重新检测/ }).first()
+  await detectButton.waitFor({ state: 'visible', timeout: 5000 })
+  const notCheckedBefore = await channelsGroup.locator('.dsh-travel-badge', { hasText: /Not checked|未检测/ }).count()
+  assert(notCheckedBefore > 0, `3081 channels showed no "not checked" runtime badge before probing: count=${notCheckedBefore}`)
+  pass('3081 runtime badges start as not-checked (unprobed is not unreachable)', `count=${notCheckedBefore}`)
+
+  // 手动检测：点击后应真实打到后端并刷新运行态（health 档，不消耗配额）。
+  const statusBefore = await channelsGroup.locator('.dsh-travel-meta').last().innerText().catch(() => '')
+  await detectButton.click()
+  const probed = await page.waitForFunction(() => {
+    const meta = document.querySelectorAll('details.dsh-travel-group')[0]?.querySelector('.dsh-travel-meta')
+    return meta !== undefined && meta !== null && /health|full|体检|检测/i.test(meta.textContent ?? '')
+  }, undefined, { timeout: 20000 }).then(() => true).catch(() => false)
+  assert(probed, `3081 manual check did not switch status mode to health (before="${statusBefore}")`)
+  const reachableCount = await channelsGroup.locator('.dsh-travel-badgeOk', { hasText: /Reachable|可达/ }).count()
+  const unreachableCount = await channelsGroup.locator('.dsh-travel-badgeWarn', { hasText: /Unreachable|不可达/ }).count()
+  assert(reachableCount + unreachableCount > 0, '3081 manual check produced no runtime verdicts at all')
+  pass('3081 manual health check renders real runtime verdicts', `reachable=${reachableCount} unreachable=${unreachableCount}`)
+
   pass('3081 Chromium closed direct bodies display:none/zero-layout', 'top×3 / FR×5 / companion / UsagePanel')
 }
 

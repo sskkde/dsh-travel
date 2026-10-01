@@ -21,6 +21,8 @@ import { BaseAdapter, CAP_NATURAL_LANGUAGE, CAP_STRUCTURED_RESULT, EngineError, 
 
 /** 携程问道官方端点（实测，learnings 行 22）。 */
 export const WENDAO_ENDPOINT = 'https://wendao-skill-prod.ctrip.com/skill/query'
+/** 端点覆盖环境变量（状态页与适配器共用；缺省仍为 WENDAO_ENDPOINT）。 */
+export const WENDAO_ENDPOINT_ENV = 'TRAVEL_WENDAO_ENDPOINT'
 
 /** Key 标识符（编排者约定）：resolveKey 首参，环境兜底名=标识符本身
  * （process.env.wendao）；credentials 层 resolveCredential 回调把标识符映射为
@@ -241,7 +243,7 @@ export class WendaoAdapter extends BaseAdapter {
       supports: new Set([CAP_NATURAL_LANGUAGE, CAP_STRUCTURED_RESULT]),
     })
     this.fetchFn = opts.fetchFn ?? (globalThis.fetch as unknown as FetchLike).bind(globalThis)
-    this.endpoint = opts.endpoint ?? WENDAO_ENDPOINT
+    this.endpoint = opts.endpoint ?? process.env[WENDAO_ENDPOINT_ENV] ?? WENDAO_ENDPOINT
     this.timeoutMs = opts.timeoutMs ?? 20000
   }
 

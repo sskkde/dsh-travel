@@ -23,6 +23,8 @@ export const AMAP_KEY = 'amapWebservice'
 /** JSAPI 侧标识符（ref `AMAP_JSAPI`+`AMAP_JSCODE`；地图加载 W5 用，REST 不消费）。 */
 export const AMAP_JSAPI_KEY = 'amapJsapi'
 export const AMAP_JSCODE_KEY = 'amapJscode'
+/** 高德 JS API 根端点（地图前端加载；状态页与地图接线共用）。 */
+export const AMAP_JSAPI_BASE = 'https://webapi.amap.com'
 export const AMAP_API_BASE = 'https://restapi.amap.com/v3'
 
 /** 个人搜索配额 5000/月口径（learnings 行 13；收敛服务端）。 */

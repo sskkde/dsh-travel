@@ -286,6 +286,11 @@ export class FlyaiAdapter extends BaseAdapter {
   /** 渠道开关 + 二进制就位（零 key 试用档：无 key 也可用）。 */
   override async available(env?: KeyResolutionEnv): Promise<boolean> {
     if (!channelEnabled('flyai', env)) return false
+    return this.isBinaryReady()
+  }
+
+  /** 本地二进制就绪判定（同步、零网络；状态页复用实例配置）。 */
+  isBinaryReady(): boolean {
     return resolveFlyaiCommand(this.binPath) !== undefined
   }
 

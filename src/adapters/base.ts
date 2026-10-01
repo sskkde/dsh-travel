@@ -127,12 +127,11 @@ export function toDegraded(source: string, codeOrError: EngineErrorCode | Engine
 // ────────────────────────── Key 解析链（ADR-12：settings→credentials→env） ──────────────────────────
 
 /**
- * Key 解析环境。settings 位（readSettings）为 W6 预留接口：settings 命名
- * 空间 `travel` 接通后由工具/适配器传入热读取快照；本波该位缺省 undefined
- * （等价“未配置”），credentials→env 两段立即可用。
+ * Key 解析环境。settings 位（readSettings）从 dsh-travel entry Config 热快照读取；
+ * 快照缺省时该位为 undefined（等价“未配置”），credentials→env 两段仍可用。
  */
 export interface KeyResolutionEnv {
-  /** settings 命名空间 travel 的 Key 读取接口（W6 接线；signature 待 spike 确认）。 */
+  /** dsh-travel Config 的 Key 读取接口。 */
   readSettings?: (key: string) => string | undefined
   /** credentials 解析（宿主 ctx.credentials.resolve(CredentialRef) 的适配签名）。 */
   resolveCredential?: (ref: string) => Promise<string | undefined>

@@ -155,7 +155,7 @@ export class McpStreamClient {
   private lastActiveAt = 0
 
   constructor(opts: McpClientOptions = {}) {
-    this.url = opts.url ?? DEFAULT_RAIL_MCP_URL
+    this.url = opts.url ?? process.env[RAIL_MCP_URL_ENV] ?? DEFAULT_RAIL_MCP_URL
     this.fetchFn = opts.fetchFn ?? (globalThis.fetch as unknown as FetchLike).bind(globalThis)
     this.timeoutMs = opts.timeoutMs ?? 10000
     this.idleTimeoutMs = opts.idleTimeoutMs ?? 10 * 60 * 1000

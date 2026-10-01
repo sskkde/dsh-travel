@@ -1,8 +1,7 @@
 /**
  * dsh-travel 设置卡（design §10.1 UI 结构三分组；FR-8）。
  *
- * 注册入 `settings.plugin.item`（keyed by 命名空间 'travel'）：设置-插件页
- * 按服务命名空间 dispatch，本卡与 node 半注册的 travel 命名空间自动配对。
+ * 注册入 `settings.section`（list entry id=dsh-travel），自定义页由宿主设置 shell 提供。
  * 三分组：
  *   1) 功能渠道开关矩阵（FR-3~FR-7，每项独立启停，含 Key 需求标注）
  *   2) 渠道 Key 管理（逐 Key 卡片：脱敏 write-only 输入 + 删除）
@@ -10,21 +9,29 @@
  * NFR-10 冗余校验为软警示（冗余不足警告条，允许强制保存；弹窗化属 v2）。
  */
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { useEffect, useRef, useState } from 'react'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   ADVANCED_FIELDS, CHANNEL_FIELDS, CHANNEL_GROUPS, COMPANION_SERVICE_IDS, KEY_FIELDS,
   type ChannelGroup,
 } from './fields'
 import { UsagePanel } from './UsagePanel'
 import { fetchKeyStatus, mergeKeyConfigured, type KeyStatusResult } from './key-status'
-import type { TravelCardState, TravelEditPath, TravelSettingsCardFace } from './form'
+import {
+  fetchChannelStatus,
+  mergeChannelStatus,
+  type ChannelProbe,
+  type ChannelStatusResult,
+  type ChannelStatusRowView,
+} from './channel-status'
+import type { TravelEditPath, TravelSettingsCardFace } from './form'
 import type { TravelSettingsCardKey } from './locales'
 
-/** 渲染器绑定的 props：runtime（keyed root）+ travel 文案 + 本卡注入面。 */
+/** 0.1.7 settings.section 的 runtime/render slots/locale/业务注入四面组合。 */
 export type TravelSettingsCardProps =
-  PropsRuntime<'settings.plugin.item'>
+  PropsRuntime<'settings.section'>
   & PropsLocale<'travel'>
+  & PropsRenderSlots<never>
   & InjectFace<TravelSettingsCardFace>
 
 /** 卡内 scoped 样式（--dsw-alias-* 主题变量，与官方设置面一致）。 */
@@ -73,6 +80,10 @@ details.dsh-travel-group:not([open]) > .dsh-travel-groupBody,details.dsh-travel-
 .dsh-travel-hint{color:var(--dsw-alias-label-tertiary);margin:0;font-size:12px;line-height:1.5}
 .dsh-travel-meta{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:1.5}
 .dsh-travel-footer{display:flex;justify-content:flex-end;align-items:center;gap:8px;padding-top:4px}
+.dsh-travel-statusActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:4px}
+.dsh-travel-statusActions .dsh-travel-rowHint{flex:1;min-width:220px}
+.dsh-travel-statusEndpoint{overflow-wrap:anywhere}
+.dsh-travel-statusError{color:var(--dsw-alias-label-error);margin:0;font-size:12px;line-height:1.5}
 .dsh-travel-failed{min-width:0;color:var(--dsw-alias-label-error);flex:1;margin:0;font-size:12px;line-height:1.5}
 .dsh-travel-save{background:var(--dsw-alias-label-primary);color:var(--dsw-alias-bg-layer-3);border:1px solid transparent}
 .dsh-travel-save:hover:not(:disabled){opacity:.9}
@@ -92,6 +103,44 @@ function groupTitleKey(group: ChannelGroup): TravelSettingsCardKey {
 /** 渠道字段 locale 键前缀。 */
 function channelKey(id: string, suffix: 'label' | 'hint'): TravelSettingsCardKey {
   return (suffix === 'label' ? `ch.${id}` : `ch.${id}Hint`) as TravelSettingsCardKey
+}
+
+function readinessBadge(view: ChannelStatusRowView, t: TravelSettingsCardProps['t']): { text: string; className: string } | undefined {
+  switch (view.readinessState) {
+    case 'ready': return { text: t('status.ready'), className: 'dsh-travel-badgeOk' }
+    case 'missing-key': return { text: t('status.missingKey'), className: 'dsh-travel-badgeWarn' }
+    case 'missing-binary': return { text: t('status.missingBinary'), className: 'dsh-travel-badgeWarn' }
+    case 'no-key-required': return { text: t('status.noKeyRequired'), className: 'dsh-travel-badge' }
+    default: return undefined
+  }
+}
+
+function runtimeBadge(view: ChannelStatusRowView, t: TravelSettingsCardProps['t']): { text: string; className: string } {
+  switch (view.runtimeState) {
+    case 'reachable': return { text: t('status.reachable'), className: 'dsh-travel-badgeOk' }
+    case 'unreachable': return { text: t('status.unreachable'), className: 'dsh-travel-badgeWarn' }
+    case 'not-applicable': return { text: t('status.notApplicable'), className: 'dsh-travel-badge' }
+    case 'not-probed':
+    default: return { text: t('status.notProbed'), className: 'dsh-travel-badge' }
+  }
+}
+
+function companionLiveView(
+  id: string,
+  autostartOn: boolean,
+  companions: ChannelStatusResult['companions'],
+  t: TravelSettingsCardProps['t'],
+): { text: string; className: string; detail?: string } {
+  const row = companions?.find((item) => item.service === id)
+  if (row === undefined) {
+    return { text: autostartOn ? t('companion.liveUnknown') : t('companion.disabledDefault'), className: 'dsh-travel-badgeWarn' }
+  }
+  const liveText = row.childAlive ? t('companion.liveRunning') : t('companion.liveNotRunning')
+  const text = autostartOn ? liveText : t('companion.disabledDefault')
+  const className = autostartOn && row.childAlive ? 'dsh-travel-badgeOk' : 'dsh-travel-badgeWarn'
+  const pid = row.pid === undefined ? '-' : String(row.pid)
+  const detail = `${t('companion.managedBySession')}: ${row.managedBySession ? t('settings.on') : t('settings.off')} · ${t('companion.childAlive')}: ${row.childAlive ? t('settings.on') : t('settings.off')} · ${t('companion.pid')}: ${pid}`
+  return { text, className, detail }
 }
 
 interface CollapsibleGroupProps {
@@ -134,8 +183,50 @@ export function SettingsCard(props: TravelSettingsCardProps) {
     void fetchKeyStatus().then((result) => { if (alive) setRemoteKeys(result) })
     return () => { alive = false }
   }, [])
+
+  // 渠道状态首次只拉静态 none 投影（host 端零外部网络）；绝不在挂载时 probe。
+  const [channelStatus, setChannelStatus] = useState<ChannelStatusResult | undefined>(undefined)
+  const [channelStatusLoading, setChannelStatusLoading] = useState(false)
+  const [channelStatusError, setChannelStatusError] = useState(false)
+  const [channelStatusProbe, setChannelStatusProbe] = useState<ChannelProbe>('none')
+  const channelStatusRequest = useRef(0)
+  useEffect(() => {
+    let alive = true
+    const requestId = ++channelStatusRequest.current
+    void fetchChannelStatus('none').then((result) => {
+      if (!alive || requestId !== channelStatusRequest.current) return
+      setChannelStatus(result)
+      setChannelStatusError(result === undefined)
+    })
+    return () => { alive = false }
+  }, [])
+
+  const loadChannelStatus = (probe: Exclude<ChannelProbe, 'none'>): void => {
+    const requestId = ++channelStatusRequest.current
+    setChannelStatusLoading(true)
+    setChannelStatusError(false)
+    void fetchChannelStatus(probe).then((result) => {
+      if (requestId !== channelStatusRequest.current) return
+      setChannelStatusLoading(false)
+      if (result === undefined) {
+        setChannelStatusError(true)
+        return
+      }
+      setChannelStatus(result)
+      setChannelStatusProbe(probe)
+    })
+  }
+
+  const detectFull = (): void => {
+    const confirmed = typeof window === 'undefined'
+      ? true
+      : window.confirm(t('status.fullConfirm'))
+    if (confirmed) loadChannelStatus('full')
+  }
+
   const disabled = !state.writable || !state.exposed
   const insufficient = state.redundancy.filter((report) => report.insufficient)
+  const channelRow = (id: string): ChannelStatusRowView => mergeChannelStatus(channelStatus, id)
 
   /** Key 行「已配置」合并判定（settings-only OR 远程 configured=true）。 */
   const keyConfigured = (id: string): boolean => {
@@ -180,6 +271,10 @@ export function SettingsCard(props: TravelSettingsCardProps) {
                       {defs.map((def) => {
                         const row = state.channels[group][def.id]
                         const on = row.text === 'true'
+                        const status = channelRow(def.id)
+                        const readiness = readinessBadge(status, t)
+                        const runtime = runtimeBadge(status, t)
+                        const configOn = status.enabled ?? on
                         return (
                           <div className="dsh-travel-row" key={def.id}>
                             <label className="dsh-travel-switch">
@@ -192,6 +287,13 @@ export function SettingsCard(props: TravelSettingsCardProps) {
                               <span className="dsh-travel-rowText">
                                 <span className="dsh-travel-rowLabel">{t(channelKey(def.id, 'label'))}</span>
                                 <span className="dsh-travel-rowHint">{t(channelKey(def.id, 'hint'))}</span>
+                                {status.endpoint !== undefined && status.endpoint !== '' && (
+                                  <span className="dsh-travel-rowHint dsh-travel-statusEndpoint">
+                                    {t('status.endpoint')}: {status.endpoint}（{status.endpointSource === 'env-override' ? `${t('status.envOverride')} ${status.envVar ?? ''}` : t('status.defaultEndpoint')}）
+                                  </span>
+                                )}
+                                {status.runtimeDetail !== undefined && <span className="dsh-travel-rowHint">{t('status.detail')}: {status.runtimeDetail}</span>}
+                                {status.costLabel !== undefined && <span className="dsh-travel-rowHint">{t('status.cost')}: {status.costLabel}</span>}
                               </span>
                             </label>
                             {def.keyId !== undefined && (
@@ -202,6 +304,11 @@ export function SettingsCard(props: TravelSettingsCardProps) {
                             {def.keyId === undefined && (
                               <span className="dsh-travel-badgeOk">{t('key.zeroKeyBadge')}</span>
                             )}
+                            <span className={configOn ? 'dsh-travel-badgeOk' : 'dsh-travel-badgeWarn'}>{configOn ? t('settings.on') : t('settings.off')}</span>
+                            {/* 无 Key 渠道的就绪态恒为 no-key-required，已由上面的「免 Key」徽章表达，
+                                再渲染一次会得到两个同文案徽章（实测可见）。有 Key 渠道才显示就绪态。 */}
+                            {def.keyId !== undefined && readiness !== undefined && <span className={readiness.className}>{readiness.text}</span>}
+                            <span className={runtime.className}>{runtime.text}</span>
                           </div>
                         )
                       })}
@@ -210,6 +317,20 @@ export function SettingsCard(props: TravelSettingsCardProps) {
                 </details>
               )
             })}
+          <div className="dsh-travel-statusActions">
+            <button className="dsh-travel-button" type="button" disabled={channelStatusLoading} onClick={() => { loadChannelStatus('health') }}>
+              {channelStatusLoading ? t('status.checking') : channelStatus === undefined ? t('status.detect') : t('status.redetect')}
+            </button>
+            <button className="dsh-travel-button" type="button" disabled={channelStatusLoading} onClick={detectFull}>
+              {t('status.fullDetect')}
+            </button>
+            <span className="dsh-travel-rowHint">{t('status.fullCostHint')}</span>
+          </div>
+          {channelStatusError && <p className="dsh-travel-statusError">{t('status.loadFailed')}</p>}
+          {channelStatus !== undefined && (
+            <p className="dsh-travel-meta">{t('status.lastProbe')}: {channelStatusProbe === 'none' ? t('status.static') : channelStatusProbe}</p>
+          )}
+
           </CollapsibleGroup>
 
           {/* ── ② 渠道 Key 管理 ── */}
@@ -315,6 +436,7 @@ export function SettingsCard(props: TravelSettingsCardProps) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '0 0 0 18px' }}>
                   {COMPANION_SERVICE_IDS.map((id) => {
                     const row = state.companionServices[id]
+                    const live = companionLiveView(id, state.companionAutostart.text === 'true', channelStatus?.companions, t)
                     return (
                       <div className="dsh-travel-row" key={id}>
                         <label className="dsh-travel-switch">
@@ -327,8 +449,10 @@ export function SettingsCard(props: TravelSettingsCardProps) {
                           <span className="dsh-travel-rowText">
                             <span className="dsh-travel-rowLabel">{t(`companion.${id}` as TravelSettingsCardKey)}</span>
                             <span className="dsh-travel-rowHint">{t(`companion.${id}Hint` as TravelSettingsCardKey)}</span>
+                            {live.detail !== undefined && <span className="dsh-travel-rowHint">{live.detail}</span>}
                           </span>
                         </label>
+                        <span className={live.className}>{live.text}</span>
                       </div>
                     )
                   })}
