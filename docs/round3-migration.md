@@ -22,7 +22,7 @@
 4. `travel_record_research_assessment` 记录当前研究版本的 `sufficient` / `continue` / `insufficient`。`sufficient` 必须引用当前 `researchVersion`，预算耗尽不得伪造 sufficient。
 5. `travel_research_advice` 位于 resolve 之前的主线阶段。逐地点天气只能绑定到真实 `placeId/location`；无可用地点时返回 `blocked + nextAction`，不以西宁或任意单城代表整条环线。天气渠道失败不抹掉仍可用的天气结果。
 6. `travel_resolve_places` 校验候选来源、版本、地域和入口/住宿锚点；歧义必须返回 `needs_clarification`，由调用方回答后重试。禁止把用户回答当成别名重新搜索，也禁止用未经解析的坐标绕过此门。
-7. resolve 成功后，在 build 前按需调用 `travel_research_transport`、`travel_route_transport` 及定向 `lodging-quotes` / `rental-quotes`。这些是 resolve→build 区间的旁车证据，不改变上面的核心顺序；每段、每个报价项均独立保留状态。
+7. resolve 成功后，按需调用城际 `travel_research_transport` 及定向 `lodging-quotes` / `rental-quotes`——这些是 resolve→build 区间的旁车证据，不改变上面的核心顺序。**`travel_route_transport` 例外：它绑定 build 后的 `itinerary.canonicalRoute` 指纹，必须在 `travel_build_itinerary` 之后、`travel_render_page` 之前调用**；build 前调用会按 `places.selectedSequence` 记下 24-hex 回退指纹，render 门因指纹不等而整包丢弃（页面只剩点位、无路线/里程）。每段、每个报价项均独立保留状态。
 8. `travel_build_itinerary` 消费已解析地点和调用方 draft，人工核对 `routeCheck.issues/warnings` 后才算可交付。无坐标、缺入口/住宿锚点、关键不可达或完整性失配必须阻断，不以景区点或虚构坐标替代。
 9. `travel_render_page` 只渲染可消费的 itinerary；缺失/失败/空/哈希失配不生成空页。成功交付同时保留可点 URL 与本地 `page.html`。
 

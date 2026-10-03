@@ -310,6 +310,15 @@ export async function buildRenderData(
   const routeTransportState = await store.readArtifactWithState<RouteTransportArtifact>(planId, 'route-transport.json')
   const routeTransportRaw = consumable(routeTransportState, 'route-transport.json')
   const routeTransport = routeTransportRaw === undefined ? undefined : routeTransportForPage(routeTransportRaw, itinerary)
+  // 旁车快照存在但因指纹不等于最终 canonical 路线被丢弃时，必须留痕：静默丢弃会让页面
+  // 只剩点位、无路线/里程，且无法从回执定位（渠道失败≠成功，丢弃≠不存在）。
+  const routeTransportFingerprintDrop = routeTransportRaw !== undefined && routeTransport === undefined
+    ? {
+        source: 'artifact:route-transport.json', code: 'STALE' as const,
+        reason: 'route-transport.json 的 inputFingerprint 与当前 itinerary.canonicalRoute 指纹不一致（旁车先于 build 生成或路线已变更），本次不绘制路段；请在 build 后重跑 travel_route_transport',
+        at: new Date().toISOString(),
+      }
+    : undefined
   const insightsState = await store.readArtifactWithState<TravelInsight[]>(planId, 'insights.json')
   const insightsData = consumable(insightsState, 'insights.json')
   const insights = Array.isArray(insightsData) ? insightsData : undefined
@@ -325,7 +334,11 @@ export async function buildRenderData(
     artifactReadWarning('route-transport.json', routeTransportState),
     artifactReadWarning('insights.json', insightsState),
   ].filter((entry): entry is DegradedEntry => entry !== undefined)
-  const degradedWithReadWarnings = [...degraded, ...artifactWarnings]
+  const degradedWithReadWarnings = [
+    ...degraded,
+    ...artifactWarnings,
+    ...(routeTransportFingerprintDrop !== undefined ? [routeTransportFingerprintDrop] : []),
+  ]
   return {
     data: {
       renderedAt: new Date().toISOString(),

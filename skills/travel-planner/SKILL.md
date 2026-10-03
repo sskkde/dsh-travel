@@ -18,8 +18,10 @@ whenToUse: 用户消息涉及 去某地旅行/行程规划/目的地推荐/旅�
 
 > 完整规划请求（confirmed 新计划：destination 或 researchIntent 任一驱动，含 destination
 > 映射的兴趣种子——F1c-E 决策 5）走**调用方驱动的串行主链**。核心依赖链固定为
-> `研究 → 正文（可选）→ assessment → advice → resolve → build → render`；交通与报价是
-> resolve 后、build 前的可选旁车证据。纯单点票务/天气查询沿用「轻量路径」（§3），不强制进入完整行程链。
+> `研究 → 正文（可选）→ assessment → advice → resolve → build → render`；城际交通与报价是
+> resolve 后、build 前的可选旁车证据；**逐段 `travel_route_transport` 例外——它绑定 build 后
+> 的 canonical 路线指纹，必须在 `travel_build_itinerary` 之后、`travel_render_page` 之前调用**
+> （见步骤 8）。纯单点票务/天气查询沿用「轻量路径」（§3），不强制进入完整行程链。
 > legacy 计划（请求文件无 flowVersion 信封的旧计划）保持旧行为（浏览/导出/轻量路径）。
 
 1. **兴趣收集与回显**：`travel_intake(mode='plan', slots={…})` 收集 destination/dateStart/
@@ -60,12 +62,15 @@ whenToUse: 用户消息涉及 去某地旅行/行程规划/目的地推荐/旅�
    （单 best 解无唯一性证据不冒充 high）；腾讯取多候选按坐标判唯一——恰一 → high，
    多个 → 交澄清。**展示每个选中地点的坐标来源（coordinate_source）与
    候选选择/排除理由**。
-8. **出发及各段交通（resolve 后；前置门零网络）**：`travel_research_transport(planId, modes?)` 先查
+8. **出发及各段交通（前置门零网络；逐段查询须在 build 后）**：`travel_research_transport(planId, modes?)` 先查
    places.json——缺工件/发布失败/为空/版本过期/hash 失配/入口未解析 → 结构化
    `blocked + nextAction` 且**零网络**（不回落 destination 绕过门；失败/损坏旧数据不复活）。
-   pass 后查 ① 出发地→经验证入口城市/站/机场；②
-   `travel_route_transport(planId, modes?, expectedPlacesVersion?)` 查选中序列**每相邻段**
+   pass 后查 ① 出发地→经验证入口城市/站/机场（城际，可在 build 前）；②
+   `travel_route_transport(planId, modes?, expectedPlacesVersion?)` 查**最终 canonical 路线**每相邻段
    交通（驾驶/步行/公交按用户明确方式；无方式时默认并回显假设，不悄悄全当自驾）。
+   **②必须在 `travel_build_itinerary` 之后调用**：该旁车绑定 itinerary 的 canonical 路线指纹，
+   build 前调用会按 places.selectedSequence 记下 24-hex 回退指纹，render 门因指纹不等而整包丢弃
+   （页面只剩点位、无路线、无里程）。
    每段独立成功/失败；places 工件非 ready（failed/empty/hash_mismatch）→ 逐段门同样
    拦截零网络；仅直线估算 → `estimated` + 原因，不当真实道路/时长/可达性证据；
    缺枢纽坐标 → 衔接标未知。**展示每段状态与未核实情况**。

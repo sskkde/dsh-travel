@@ -92,4 +92,38 @@ describe('W3/T5 unknown artifact read compatibility', () => {
     expect(result.data?.totalDistanceKm).toBe(10)
     expect(result.data?.totalDurationMinutes).toBe(20)
   })
+
+  it('drops a route artifact whose fingerprint does not match the final canonical route, and records it (not silent)', async () => {
+    const planId = await plan()
+    const day = {
+      date: '2026-10-01',
+      stops: [
+        { name: 'A', category: 'attraction' as const, placeId: 'place-a', occurrenceId: 'occ-a', anchorRole: 'arrival' as const, intelRefs: [] },
+        { name: 'B', category: 'attraction' as const, placeId: 'place-b', occurrenceId: 'occ-b', anchorRole: 'departure' as const, intelRefs: [] },
+      ],
+      meals: [],
+    }
+    const canonical = canonicalRouteFromDays([day])
+    const currentItinerary = { itineraryId: 'final', schemaVersion: 2, days: [day], canonicalRoute: canonical, routeCheck: { issues: [], warnings: [] } }
+    // 旁车先于 build 生成（回退 24-hex 指纹），非最终 canonical 指纹。
+    const staleRoute = {
+      schemaVersion: 2, placesVersion: 1, inputFingerprint: 'deadbeefdeadbeefdeadbeef', generatedAt: '2026-10-01T00:00:00.000Z',
+      legs: [{
+        id: 'leg-0', fromPlaceId: 'place-a', toPlaceId: 'place-b', orderIndex: 0, placesVersion: 1, mode: 'driving' as const,
+        status: 'queried' as const, metricStatus: 'queried' as const, geometryStatus: 'queried' as const,
+        distanceKm: 10, durationMinutes: 20, observedAt: '2026-10-01T00:00:00.000Z',
+        source: { platform: 'fixture', url: 'https://example.invalid/route', fetchedAt: '2026-10-01T00:00:00.000Z' },
+      }],
+      totalDistanceKm: 10, totalDurationMinutes: 20, degraded: [],
+    }
+    await store.publishArtifacts(planId, {
+      stage: 'itinerary', files: [{ name: 'itinerary.json', data: currentItinerary }, { name: 'route-transport.json', data: staleRoute }], inputFingerprint: canonical.fingerprint,
+    })
+    const result = await buildRenderData(store, planId)
+    expect(result.data?.routeTransport).toBeUndefined()
+    expect(result.data?.totalDistanceKm).toBeUndefined()
+    const drop = result.data?.degraded.find((entry) => entry.source === 'artifact:route-transport.json' && entry.reason.includes('inputFingerprint'))
+    expect(drop).toBeDefined()
+    expect(drop?.reason).toContain('travel_route_transport')
+  })
 })
