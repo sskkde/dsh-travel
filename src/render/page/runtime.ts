@@ -1,5 +1,6 @@
 import type {
   Advice,
+  AdviceWeatherEntry,
   GeoCoords,
   IntelItem,
   ItineraryDay,
@@ -11,12 +12,23 @@ import type {
   TransportOption,
 } from '../../models/types.js'
 import type { RenderPageData } from '../render.js'
+import { buildRouteView, type RouteSegmentKind, type RouteViewModel } from './route-view.js'
+import {
+  computeMapVisibility,
+  computeOcclusionPadding,
+  hasMappableContent,
+  segmentPresentation,
+  type MapViewMode,
+  type OcclusionPadding,
+} from './map-view.js'
 
 /**
- * 行程页浏览器运行时。它只消费 render.ts 已审计的数据：
+ * 行程页浏览器运行时（地图优先版）。它只消费 render.ts 已审计的数据：
  * - itinerary/intel 文本全部进入 textContent；
  * - insights 是唯一的推荐/避雷/指南/规划展示来源；
- * - routeTransport 的 geometry 是 WGS84 GeoJSON，AMap 显示侧才转 GCJ-02。
+ * - routeTransport 的 geometry 是 WGS84 GeoJSON，AMap 显示侧才转 GCJ-02；
+ * - 路线日归属由 route-view.ts 投影（canonical 边唯一匹配，不猜别名），
+ *   总览/单日可见性与遮挡取景规则在 map-view.ts（两 provider 一致）。
  *
  * 运行时由 scripts/build.sh 经 esbuild 内联到 page.html。不要在这里加入网络算路、
  * 运行时模型调用或未经白名单的远端资源。
@@ -51,31 +63,46 @@ type RouteSegment = {
   fallback: boolean
   metricText: string
   note?: string
+  /** 展示归属（route-view 投影 + map-view 呈现规则）。 */
+  kind: RouteSegmentKind
+  dayIndex?: number
+  color: string
 }
 
 type MarkerHandle = {
   key: StopKey
   keys: StopKey[]
+  dayIndex: number
+  visible: boolean
+  setVisible: (visible: boolean) => void
   setActive: (active: boolean) => void
   setDimmed: (dimmed: boolean) => void
-  open: () => void
 }
 
 type RouteHandle = {
   id: string
+  kind: RouteSegmentKind
+  dayIndex?: number
+  visible: boolean
+  setVisible: (visible: boolean) => void
   setActive: (active: boolean) => void
 }
 
 type MapHandle = {
-  map: {
-    setView?: (center: [number, number], zoom?: number, options?: { animate?: boolean }) => unknown
-    flyTo?: (center: [number, number], zoom?: number, options?: { animate?: boolean }) => unknown
-    setCenter?: (center: [number, number], zoom?: number, options?: { animate?: boolean }) => unknown
-    setZoom?: (zoom: number) => void
-    fitBounds?: (bounds: unknown, options?: { padding?: [number, number] }) => void
-  }
+  provider: 'amap' | 'leaflet'
   markers: MarkerHandle[]
   routes: RouteHandle[]
+  /** 对当前可见对象按遮挡 padding 取景（provider 内部实现，两厂接口不混用）。 */
+  fitVisibleBounds: (padding: OcclusionPadding, options?: { maxZoom?: number; animate?: boolean }) => void
+}
+
+type PageUiState = {
+  viewMode: MapViewMode
+  dayIndex: number
+  selectedKey?: StopKey
+  lockedKey?: StopKey
+  selectedLegId?: string
+  drawerOpen: boolean
 }
 
 type PageState = {
@@ -83,16 +110,14 @@ type PageState = {
   stops: StopModel[]
   markerModels: MarkerModel[]
   segments: RouteSegment[]
+  routeView: RouteViewModel
   markerHandles: MarkerHandle[]
   routeHandles: RouteHandle[]
   map?: MapHandle
-  selectedKey?: StopKey
-  lockedKey?: StopKey
-  selectedLegId?: string
-  dayIndex: number
-  drawerOpen: boolean
   hoverTimer?: number
-}
+  lastFocus?: HTMLElement
+  switchCount: number
+} & PageUiState
 
 const DAY_COLORS = ['#e74c3c', '#f39c12', '#27ae60', '#2980b9', '#8e44ad', '#d35400', '#16a085', '#7f8c8d']
 const CATEGORY_LABEL: Record<string, string> = {
@@ -103,6 +128,10 @@ const INSIGHT_LABEL: Record<string, string> = {
 }
 const DAY_COLOR = (index: number): string => DAY_COLORS[index % DAY_COLORS.length]
 const ROUTE_FALLBACK_NOTE = '轨迹直线示意，里程为实测'
+const DAY_LABEL = (index: number): string => `第 ${index + 1} 天`
+const TRANSPORT_MODE_LABEL: Record<string, string> = {
+  driving: '驾车', walking: '步行', transit: '公交', rail: '火车', flight: '飞机', bus: '客车',
+}
 
 function byId<T extends HTMLElement>(id: string): T | undefined {
   const element = document.getElementById(id)
@@ -352,12 +381,14 @@ function endpointPoint(state: PageState, placeId: string, fallbackIndex: number)
   return state.stops[fallbackIndex]?.point
 }
 
-function routeSegments(data: RenderPageData, stops: StopModel[], provider: 'amap' | 'leaflet'): RouteSegment[] {
+function routeSegments(data: RenderPageData, stops: StopModel[], routeView: RouteViewModel, provider: 'amap' | 'leaflet'): RouteSegment[] {
   const artifact: RenderRouteTransport | undefined = data.routeTransport
   if (artifact === undefined || !Array.isArray(artifact.legs)) return []
   const stateLike: PageState = {
-    data, stops, markerModels: [], segments: [], markerHandles: [], routeHandles: [], dayIndex: 0, drawerOpen: false,
+    data, stops, markerModels: [], segments: [], markerHandles: [], routeHandles: [],
+    routeView, viewMode: 'overview', dayIndex: 0, drawerOpen: false, switchCount: 0,
   }
+  const bindingById = new Map(routeView.legs.map((item) => [item.legId, item]))
   return artifact.legs.map((leg, index) => {
     const metricStatus = leg.metricStatus ?? leg.status
     const geometryStatus = leg.geometryStatus ?? (validGeometry(leg.geometry) ? 'queried' : undefined)
@@ -391,7 +422,18 @@ function routeSegments(data: RenderPageData, stops: StopModel[], provider: 'amap
     } else if (geometryStatus === undefined && path.length > 0) {
       note = ROUTE_FALLBACK_NOTE
     }
-    return { leg, path, dashed, fallback, metricText, ...(note === undefined ? {} : { note }) }
+    // 线型只由几何状态决定（跨日不改线型）；颜色由日归属投影决定（跨日/未分配=中性色）。
+    const binding = bindingById.get(leg.id)
+    const kind: RouteSegmentKind = binding?.kind ?? 'unassigned'
+    const dayIndex = binding?.kind === 'day' ? binding.dayIndex : undefined
+    const presentation = segmentPresentation(kind, dayIndex, dashed, DAY_COLOR)
+    return {
+      leg, path, dashed, fallback, metricText,
+      ...(note === undefined ? {} : { note }),
+      kind: presentation.kind,
+      dayIndex: presentation.dayIndex,
+      color: presentation.color,
+    }
   })
 }
 
@@ -449,6 +491,8 @@ function renderArtifactStatus(card: HTMLElement, data: RenderPageData): void {
   wrap.appendChild(badges)
   card.appendChild(wrap)
 }
+
+// ────────────────────────── 顶部：标题/导出/工件状态 ──────────────────────────
 
 function renderOverview(state: PageState): void {
   const card = byId<HTMLElement>('overviewCard')
@@ -516,9 +560,42 @@ function renderOverview(state: PageState): void {
     metricStrip.appendChild(metric)
   }
   card.appendChild(metricStrip)
-  if (request.assumptions.length > 0) card.appendChild(make('p', 'muted small', `默认假设：${request.assumptions.join('；')}`))
+  if (request.assumptions.length > 0) card.appendChild(make('p', 'muted small trip-assumptions', `默认假设：${request.assumptions.join('；')}`))
   renderArtifactStatus(card, state.data)
 }
+
+// ────────────────────────── 顶部：总览/日 tabs ──────────────────────────
+
+function renderDayTabs(state: PageState): void {
+  const tabs = byId<HTMLElement>('dayTabs')
+  if (tabs === undefined) return
+  clear(tabs)
+  const overviewButton = make('button', 'day-tab')
+  overviewButton.type = 'button'
+  overviewButton.dataset.viewMode = 'overview'
+  overviewButton.setAttribute('aria-pressed', String(state.viewMode === 'overview'))
+  appendText(overviewButton, '总览')
+  overviewButton.addEventListener('click', () => selectOverview(state, true))
+  tabs.appendChild(overviewButton)
+  state.data.itinerary.days.forEach((day, dayIndex) => {
+    const button = make('button', 'day-tab')
+    button.type = 'button'
+    button.dataset.viewMode = 'day'
+    button.dataset.dayIndex = String(dayIndex)
+    const active = state.viewMode === 'day' && state.dayIndex === dayIndex
+    button.setAttribute('aria-pressed', String(active))
+    button.setAttribute('aria-label', `${DAY_LABEL(dayIndex)} ${day.date}`)
+    const dot = make('span', 'day-dot')
+    dot.style.backgroundColor = DAY_COLOR(dayIndex)
+    button.appendChild(dot)
+    appendText(button, `DAY ${String(dayIndex + 1).padStart(2, '0')}`)
+    if (day.theme !== undefined) appendText(button, day.theme, 'day-tab-theme')
+    button.addEventListener('click', () => selectDay(state, dayIndex, true))
+    tabs.appendChild(button)
+  })
+}
+
+// ────────────────────────── 左侧：总览摘要 / 单日时间轴 ──────────────────────────
 
 function appendHardFacts(parent: Element, intel: IntelItem | undefined): void {
   if (intel === undefined) return
@@ -540,11 +617,124 @@ function appendInsightCards(parent: Element, insights: TravelInsight[], max = 3)
   if (stack.childElementCount > 0) parent.appendChild(stack)
 }
 
+function renderSidePanel(state: PageState): void {
+  const card = byId<HTMLElement>('timelineCard')
+  if (card === undefined) return
+  clear(card)
+  if (state.viewMode === 'overview') renderSideOverview(state, card)
+  else renderSideDay(state, card)
+}
+
+/** 总览摘要：逐日卡片（日色 + 停留点数 + 当日里程/部分数据），点击进入单日。 */
+function renderSideOverview(state: PageState, card: HTMLElement): void {
+  appendHeading(card, 'h2', '行程总览', 'card-title')
+  appendText(card, `${state.stops.length} 个行程点 · ${state.data.itinerary.days.length} 天`, 'muted small side-hint')
+  const digest = make('div', 'overview-days')
+  state.data.itinerary.days.forEach((day, dayIndex) => {
+    const stat = state.routeView.dayStats[dayIndex]
+    const button = make('button', 'overview-day')
+    button.type = 'button'
+    button.dataset.dayIndex = String(dayIndex)
+    button.style.setProperty('--day-color', DAY_COLOR(dayIndex))
+    button.setAttribute('aria-label', `查看${DAY_LABEL(dayIndex)} ${day.date}`)
+    const head = make('div', 'overview-day-head')
+    appendText(head, `${DAY_LABEL(dayIndex)} · ${day.date}`, 'overview-day-title')
+    if (day.theme !== undefined) appendText(head, day.theme, 'day-theme')
+    digest.appendChild(button)
+    button.appendChild(head)
+    const stopCount = day.stops.length
+    let metricText: string
+    if (stat !== undefined && stat.legCount > 0 && stat.complete && stat.distanceKm !== undefined) {
+      metricText = `${stopCount} 个停留点 · ${stat.distanceKm.toFixed(1)} km`
+    } else if (stat !== undefined && stat.legCount > 0 && stat.distanceKm !== undefined) {
+      metricText = `${stopCount} 个停留点 · 约 ${stat.distanceKm.toFixed(1)} km（估算）`
+    } else if (stat !== undefined && stat.legCount > 0) {
+      metricText = `${stopCount} 个停留点 · 部分数据/不可用`
+    } else {
+      metricText = `${stopCount} 个停留点 · 路段未归属`
+    }
+    appendText(button, metricText, 'overview-day-meta')
+    button.addEventListener('click', () => selectDay(state, dayIndex, true))
+  })
+  card.appendChild(digest)
+  if (state.routeView.crossDayCount > 0 || state.routeView.unassignedCount > 0) {
+    const note = make('p', 'muted small side-note')
+    note.textContent = `另有 ${state.routeView.crossDayCount} 段跨日衔接、${state.routeView.unassignedCount} 段未归属路段，在总览图上单独标识。`
+    card.appendChild(note)
+  }
+}
+
+/** 单日时间轴：只列当天 stops（hover 预览 / 点击锁定）。 */
+function renderSideDay(state: PageState, card: HTMLElement): void {
+  const day = state.data.itinerary.days[state.dayIndex]
+  if (day === undefined) return
+  appendHeading(card, 'h2', `${DAY_LABEL(state.dayIndex)} · ${day.date}`, 'card-title')
+  if (day.theme !== undefined) appendText(card, day.theme, 'day-theme side-hint')
+  const track = make('div', 'timeline-track')
+  const stopList = make('div', 'stop-list')
+  day.stops.forEach((stop, stopIndex) => {
+    const model = state.stops.find((candidate) => candidate.dayIndex === state.dayIndex && candidate.stopIndex === stopIndex)
+    if (model === undefined) return
+    const button = make('button', 'stop-button')
+    button.type = 'button'
+    button.dataset.selectionKey = model.key
+    button.setAttribute('aria-label', `查看${stop.name}`)
+    button.setAttribute('aria-pressed', String(state.selectedKey === model.key))
+    const index = make('span', 'stop-index', String(stopIndex + 1))
+    index.style.backgroundColor = DAY_COLOR(state.dayIndex)
+    button.appendChild(index)
+    const copy = make('span', 'stop-copy')
+    appendText(copy, stop.name, 'stop-name')
+    appendText(copy, `${CATEGORY_LABEL[stop.category] ?? stop.category}${stop.durationHint !== undefined ? ` · ${stop.durationHint} 分钟` : ''}`, 'stop-meta')
+    const stopInsights = insightsForStop(state.data, stop)
+    if (stopInsights.length > 0) appendText(copy, stopInsights[0].text, 'stop-summary')
+    else appendText(copy, '缺失/下一步：暂无归纳', 'stop-summary')
+    button.appendChild(copy)
+    button.addEventListener('mouseenter', () => scheduleHover(state, model.key))
+    button.addEventListener('mouseover', () => scheduleHover(state, model.key))
+    button.addEventListener('mouseleave', () => cancelHover(state))
+    button.addEventListener('click', () => selectStop(state, model.key, true))
+    button.addEventListener('keydown', (event) => handleSelectionKey(state, model.key, event))
+    stopList.appendChild(button)
+  })
+  track.appendChild(stopList)
+  card.appendChild(track)
+}
+
+// ────────────────────────── 右侧：详情面板（唯一详情面） ──────────────────────────
+
+function weatherForDay(data: RenderPageData, day: ItineraryDay): AdviceWeatherEntry[] {
+  const advice: Advice | undefined = data.advice
+  if (advice === undefined || !Array.isArray(advice.weather)) return []
+  return advice.weather.filter((entry) => entry.date === day.date)
+}
+
+/** 逐地天气行：location/source/预报或气候概况/未分配日期说明——不以单城代表整条路线。 */
+function appendWeatherLines(parent: Element, entries: AdviceWeatherEntry[]): void {
+  if (entries.length === 0) return
+  const wrap = make('div', 'weather-lines')
+  for (const entry of entries) {
+    const line = make('div', 'weather-line')
+    const place = typeof entry.location === 'string' && entry.location.trim().length > 0
+      ? entry.location
+      : (typeof entry.placeId === 'string' ? `地点 ${entry.placeId}` : '未分配地点')
+    appendText(line, place, 'weather-place')
+    if (entry.tempRange?.length === 2) appendText(line, `${entry.tempRange[0]}~${entry.tempRange[1]}°C`, 'weather-temp')
+    if (entry.dayForecast !== undefined) appendText(line, entry.dayForecast)
+    if (entry.beyondForecastWindow === true) appendText(line, '气候概况', 'muted small')
+    if (entry.placeDateAssigned === false) appendText(line, '未分配逐地日期（按旅行窗口查询）', 'muted small')
+    if (entry.source?.platform !== undefined) appendText(line, `来源：${entry.source.platform}`, 'muted small')
+    wrap.appendChild(line)
+  }
+  parent.appendChild(wrap)
+}
+
 function appendStopSummary(parent: Element, state: PageState, model: StopModel): void {
   const stop = model.stop
+  const kind = make('div', 'detail-kicker')
+  appendText(kind, `${DAY_LABEL(model.dayIndex)} · ${CATEGORY_LABEL[stop.category] ?? stop.category}${stop.durationHint !== undefined ? ` · 建议 ${stop.durationHint} 分钟` : ''}`)
+  parent.appendChild(kind)
   appendHeading(parent, 'h3', stop.name)
-  const typeText = `${CATEGORY_LABEL[stop.category] ?? stop.category}${stop.durationHint !== undefined ? ` · 建议 ${stop.durationHint} 分钟` : ''}`
-  appendText(parent, typeText, 'day-theme')
   const insights = insightsForStop(state.data, stop)
   if (insights.length === 0) {
     appendText(parent, '缺失/下一步：暂无已归纳且可引用的建议。', 'next-step')
@@ -553,150 +743,260 @@ function appendStopSummary(parent: Element, state: PageState, model: StopModel):
     appendHardFacts(parent, sourceItem(state.data, stop))
     appendCitations(parent, insights)
   }
+  const source = sourceItem(state.data, stop)
+  if (source?.source !== undefined) {
+    const sourceBox = make('div', 'detail-source')
+    appendText(sourceBox, '来源', 'muted small')
+    appendSafeLink(sourceBox, source.title, source.source.platform, source.source.url)
+    parent.appendChild(sourceBox)
+  }
 }
 
-function renderDayDrawer(state: PageState): void {
+function renderDetail(state: PageState): void {
   const body = byId<HTMLElement>('dayCard')
   if (body === undefined) return
   clear(body)
-  const day = state.data.itinerary.days[state.dayIndex]
-  if (day === undefined) return
-  const summary = make('div', 'day-summary')
-  appendHeading(summary, 'h3', `第 ${state.dayIndex + 1} 天 · ${day.date}`)
-  if (day.theme !== undefined) appendText(summary, day.theme, 'day-theme')
-  const actions = make('div', 'day-actions')
-  const play = make('button', 'action-button', '▶ 播放本日')
-  play.type = 'button'
-  play.id = 'playDay'
-  play.addEventListener('click', () => playDay(state))
-  actions.appendChild(play)
-  summary.appendChild(actions)
-  const insights = insightsForDay(state.data, day)
-  if (insights.length === 0) appendText(summary, '缺失/下一步：本日暂无已归纳建议。', 'next-step')
-  else {
-    appendInsightCards(summary, insights, 3)
-    appendCitations(summary, insights)
-  }
-  const stops = make('div', 'insight-stack')
-  for (const stop of day.stops.slice(0, 8)) {
-    const stopSummary = make('div', 'insight-card')
-    const heading = make('div', 'data-item-title', stop.name)
-    stopSummary.appendChild(heading)
-    const facts = make('div', 'stop-meta', `${CATEGORY_LABEL[stop.category] ?? stop.category}${stop.durationHint !== undefined ? ` · ${stop.durationHint} 分钟` : ''}`)
-    stopSummary.appendChild(facts)
-    const stopInsights = insightsForStop(state.data, stop)
-    if (stopInsights.length === 0) appendText(stopSummary, '缺失/下一步：暂无归纳。', 'next-step')
-    else appendText(stopSummary, stopInsights.slice(0, 1)[0].text, 'insight-text')
-    stops.appendChild(stopSummary)
-  }
-  summary.appendChild(stops)
-  body.appendChild(summary)
-}
-
-function renderTimeline(state: PageState): void {
-  const card = byId<HTMLElement>('timelineCard')
-  if (card === undefined) return
-  clear(card)
-  appendHeading(card, 'h2', '日程轨道', 'card-title')
-  const track = make('div', 'timeline-track')
-  state.data.itinerary.days.forEach((day, dayIndex) => {
-    const daySection = make('section', `timeline-day${dayIndex === state.dayIndex ? ' active' : ''}`)
-    daySection.dataset.dayIndex = String(dayIndex)
-    const dayButton = make('button', 'day-button')
-    dayButton.type = 'button'
-    dayButton.dataset.dayIndex = String(dayIndex)
-    dayButton.setAttribute('aria-label', `查看第 ${dayIndex + 1} 天 ${day.date}`)
-    dayButton.appendChild(make('span', 'day-dot'))
-    const dot = dayButton.firstElementChild
-    if (dot instanceof HTMLElement) dot.style.backgroundColor = DAY_COLOR(dayIndex)
-    appendText(dayButton, `第 ${dayIndex + 1} 天`)
-    appendText(dayButton, day.date, 'day-date')
-    dayButton.addEventListener('click', () => selectDay(state, dayIndex, true))
-    daySection.appendChild(dayButton)
-    const stopList = make('div', 'stop-list')
-    day.stops.forEach((stop, stopIndex) => {
-      const model = state.stops.find((candidate) => candidate.dayIndex === dayIndex && candidate.stopIndex === stopIndex)
-      if (model === undefined) return
-      const button = make('button', 'stop-button')
-      button.type = 'button'
-      button.dataset.selectionKey = model.key
-      button.setAttribute('aria-label', `查看${stop.name}`)
-      const index = make('span', 'stop-index', String(stopIndex + 1))
-      index.style.backgroundColor = DAY_COLOR(dayIndex)
-      button.appendChild(index)
-      const copy = make('span', 'stop-copy')
-      appendText(copy, stop.name, 'stop-name')
-      appendText(copy, `${CATEGORY_LABEL[stop.category] ?? stop.category}${stop.durationHint !== undefined ? ` · ${stop.durationHint} 分钟` : ''}`, 'stop-meta')
+  const selected = state.selectedKey !== undefined ? stopByKey(state, state.selectedKey) : undefined
+  if (selected !== undefined) {
+    // 景点详情（总览/单日一致；总览保持 tabs active，不退出总览）。
+    appendStopSummary(body, state, selected)
+  } else if (state.viewMode === 'day') {
+    const day = state.data.itinerary.days[state.dayIndex]
+    if (day === undefined) return
+    const summary = make('div', 'day-summary')
+    appendHeading(summary, 'h3', `${DAY_LABEL(state.dayIndex)} · ${day.date}`)
+    if (day.theme !== undefined) appendText(summary, day.theme, 'day-theme')
+    const weather = weatherForDay(state.data, day)
+    if (weather.length > 0) {
+      appendText(summary, '当日逐地天气', 'muted small')
+      appendWeatherLines(summary, weather)
+    } else {
+      appendText(summary, '缺失/下一步：当日暂无逐地天气数据。', 'next-step')
+    }
+    const actions = make('div', 'day-actions')
+    const play = make('button', 'action-button', '▶ 播放本日')
+    play.type = 'button'
+    play.id = 'playDay'
+    play.addEventListener('click', () => playDay(state))
+    actions.appendChild(play)
+    summary.appendChild(actions)
+    const insights = insightsForDay(state.data, day)
+    if (insights.length === 0) appendText(summary, '缺失/下一步：本日暂无已归纳建议。', 'next-step')
+    else {
+      appendInsightCards(summary, insights, 3)
+      appendCitations(summary, insights)
+    }
+    const stops = make('div', 'insight-stack')
+    for (const stop of day.stops.slice(0, 8)) {
+      const stopSummary = make('div', 'insight-card')
+      const heading = make('div', 'data-item-title', stop.name)
+      stopSummary.appendChild(heading)
+      const facts = make('div', 'stop-meta', `${CATEGORY_LABEL[stop.category] ?? stop.category}${stop.durationHint !== undefined ? ` · ${stop.durationHint} 分钟` : ''}`)
+      stopSummary.appendChild(facts)
       const stopInsights = insightsForStop(state.data, stop)
-      if (stopInsights.length > 0) appendText(copy, stopInsights[0].text, 'stop-summary')
-      else appendText(copy, '缺失/下一步：暂无归纳', 'stop-summary')
-      button.appendChild(copy)
-      button.addEventListener('mouseenter', () => scheduleHover(state, model.key))
-      button.addEventListener('mouseover', () => scheduleHover(state, model.key))
-      button.addEventListener('mouseleave', () => cancelHover(state))
-      button.addEventListener('click', () => selectStop(state, model.key, true))
-      button.addEventListener('keydown', (event) => handleSelectionKey(state, model.key, event))
-      stopList.appendChild(button)
-    })
-    daySection.appendChild(stopList)
-    track.appendChild(daySection)
-  })
-  card.appendChild(track)
-}
-
-function renderWarnings(state: PageState): void {
-  const strip = byId<HTMLElement>('mapWarnStrip')
-  if (strip === undefined) return
-  const warnings = [...(state.data.map?.warnings ?? [])]
-  if (warnings.length === 0) {
-    strip.classList.add('hidden')
-    return
-  }
-  strip.textContent = `⚠ ${warnings.join('；')}`
-  strip.classList.remove('hidden')
-}
-
-function renderMapControls(state: PageState): void {
-  const toolbar = byId<HTMLElement>('mapToolbar')
-  if (toolbar === undefined) return
-  const providerText = state.data.map?.provider === 'amap' ? '高德 JSAPI 2.0' : 'Leaflet 1.9 + OSM'
-  const provider = byId<HTMLElement>('mapProviderLabel')
-  if (provider !== undefined) provider.textContent = providerText
-  const drawerToggle = byId<HTMLButtonElement>('drawerToggle')
-  const drawer = byId<HTMLElement>('dayDrawer')
-  if (drawerToggle !== undefined && drawer !== undefined) {
-    drawerToggle.addEventListener('click', () => {
-      state.drawerOpen = !state.drawerOpen
-      drawer.classList.toggle('open', state.drawerOpen)
-      drawerToggle.setAttribute('aria-expanded', String(state.drawerOpen))
-      setDataset('drawer', state.drawerOpen ? 'open' : 'closed')
-    })
+      if (stopInsights.length === 0) appendText(stopSummary, '缺失/下一步：暂无归纳。', 'next-step')
+      else appendText(stopSummary, stopInsights.slice(0, 1)[0].text, 'insight-text')
+      stops.appendChild(stopSummary)
+    }
+    summary.appendChild(stops)
+    body.appendChild(summary)
+  } else {
+    appendText(body, '总览模式：点击地图标记或左侧日期查看景点详情。', 'muted side-hint')
   }
 }
 
-function renderStopPopover(state: PageState, model: StopModel | undefined): void {
-  const map = byId<HTMLElement>('map')
-  if (map === undefined) return
-  const old = byId<HTMLElement>('mapPopover')
-  if (old !== undefined) old.remove()
-  if (model === undefined) return
-  const popover = make('aside', 'map-popover')
-  popover.id = 'mapPopover'
-  popover.setAttribute('role', 'dialog')
-  popover.setAttribute('aria-label', model.stop.name)
-  appendStopSummary(popover, state, model)
-  const close = make('button', 'action-button', '关闭')
-  close.type = 'button'
-  close.addEventListener('click', () => {
-    state.lockedKey = undefined
-    state.selectedKey = undefined
-    renderStopPopover(state, undefined)
-    updateSelectionClasses(state)
+// ────────────────────────── 底部：天气/交通/预算/提醒 摘要入口 ──────────────────────────
+
+function dockItem(state: PageState, icon: string, label: string, value: string, targetId: string, extraNote?: string): HTMLElement {
+  const item = make('button', 'dock-item')
+  item.type = 'button'
+  item.setAttribute('data-target', targetId)
+  item.setAttribute('aria-controls', targetId)
+  appendText(item, icon, 'dock-icon')
+  const copy = make('span', 'dock-copy')
+  appendText(copy, label, 'dock-label')
+  appendText(copy, value, 'dock-value')
+  if (extraNote !== undefined && extraNote.length > 0) appendText(copy, extraNote, 'dock-note')
+  item.appendChild(copy)
+  item.addEventListener('click', () => {
+    const target = byId<HTMLElement>(targetId)
+    if (target === undefined) return
+    target.classList.remove('hidden')
+    target.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
+    target.classList.add('dock-flash')
+    window.setTimeout(() => target.classList.remove('dock-flash'), 1200)
   })
-  popover.appendChild(close)
-  map.appendChild(popover)
-  setDataset('popup', model.key)
+  return item
 }
+
+function transportSummary(state: PageState): { value: string; note?: string } {
+  const legs = state.data.routeTransport?.legs ?? []
+  const totalKm = state.data.totalDistanceKm ?? state.data.routeTransport?.totalDistanceKm
+  const modes = [...new Set(legs.map((leg) => TRANSPORT_MODE_LABEL[leg.mode] ?? leg.mode))]
+  if (legs.length === 0 && state.data.transport === undefined) {
+    return { value: '暂无交通数据' }
+  }
+  const modeText = modes.length > 0 ? modes.join('/') : (Array.isArray(state.data.transport) && state.data.transport.length > 0 ? state.data.transport[0].mode : '')
+  const incomplete = legs.some((leg) => {
+    const status = leg.metricStatus ?? leg.status
+    return status === 'unavailable' || status === 'blocked' || status === 'estimated'
+  })
+  const value = finiteNumber(totalKm)
+    ? `${modeText ? `${modeText} · ` : ''}${legs.length} 段 · ${totalKm.toFixed(1)} km`
+    : `${modeText ? `${modeText} · ` : ''}${legs.length} 段`
+  return { value, ...(incomplete ? { note: '部分路段估算/不可用' } : {}) }
+}
+
+function budgetSummaryOf(state: PageState): { value: string; note?: string } {
+  const cost = state.data.cost
+  if (cost?.total !== undefined) {
+    const scope = cost.components && Object.values(cost.components).some((component) => component.scope === 'perPerson') ? '人均口径见详情' : undefined
+    return { value: `${cost.total.min}~${cost.total.max} ${cost.total.currency ?? ''}`, ...(scope !== undefined ? { note: scope } : {}) }
+  }
+  const budget = state.data.request.slots.budget
+  if (budget?.amount !== undefined) return { value: `预算 ${budget.amount} ${budget.currency ?? 'CNY'}`, note: '成本明细未生成' }
+  return { value: '暂无预算数据' }
+}
+
+function reminderCount(state: PageState): { count: number; target: string } {
+  const degraded = state.data.degraded?.length ?? 0
+  const warnings = state.data.itinerary.routeCheck?.warnings?.length ?? 0
+  const issues = state.data.itinerary.routeCheck?.issues?.length ?? 0
+  const mapWarnings = state.data.map?.warnings?.length ?? 0
+  const count = degraded + warnings + issues + mapWarnings
+  return { count, target: warningCardTarget(state, count) }
+}
+
+function warningCardTarget(_state: PageState, count: number): string {
+  return count > 0 ? 'warningCard' : 'insightsCard'
+}
+
+function renderDock(state: PageState): void {
+  const dock = byId<HTMLElement>('bottomDock')
+  if (dock === undefined) return
+  for (const child of Array.from(dock.children)) child.remove()
+  const advice: Advice | undefined = state.data.advice
+  const weatherEntries = advice?.weather ?? []
+  const weatherPlaces = new Set(weatherEntries.map((entry) => entry.location ?? entry.placeId ?? '未分配地点').filter((place) => place !== '未分配地点'))
+  const weatherDates = new Set(weatherEntries.map((entry) => entry.date))
+  const weatherValue = weatherEntries.length === 0
+    ? '暂无天气数据'
+    : weatherPlaces.size > 0
+      ? `${weatherPlaces.size} 地 · ${weatherDates.size} 个日期`
+      : `${weatherEntries.length} 条（未分配地点）`
+  dock.appendChild(dockItem(state, '☼', '天气', weatherValue, 'adviceCard', weatherEntries.length === 0 ? '可稍后补充' : undefined))
+
+  const transport = transportSummary(state)
+  dock.appendChild(dockItem(state, '↗', '交通', transport.value, 'transportCard', transport.note))
+
+  const budget = budgetSummaryOf(state)
+  dock.appendChild(dockItem(state, '¥', '预算', budget.value, 'rentalCostCard', budget.note))
+
+  const reminder = reminderCount(state)
+  dock.appendChild(dockItem(state, '!', '提醒', reminder.count > 0 ? `${reminder.count} 条待留意` : '暂无提醒', reminder.target))
+
+  const more = make('button', 'dock-item dock-more')
+  more.type = 'button'
+  appendText(more, '☰', 'dock-icon')
+  const moreCopy = make('span', 'dock-copy')
+  appendText(moreCopy, '更多信息', 'dock-label')
+  appendText(moreCopy, '住宿/美食/指南', 'dock-value')
+  more.appendChild(moreCopy)
+  more.addEventListener('click', () => {
+    const grid = byId<HTMLElement>('supplementalGrid')
+    grid?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
+  })
+  dock.appendChild(more)
+}
+
+// ────────────────────────── 路线面板：图例 + 逐段列表 ──────────────────────────
+
+function renderRoutePanel(state: PageState): void {
+  const list = byId<HTMLElement>('legList')
+  const legend = byId<HTMLElement>('routeLegend')
+  if (list === undefined || legend === undefined) return
+  clear(list)
+  clear(legend)
+  const visibleSegments = state.viewMode === 'overview'
+    ? state.segments
+    : state.segments.filter((segment) => segment.kind === 'day' && segment.dayIndex === state.dayIndex)
+  const separateSegments = state.viewMode === 'day'
+    ? state.segments.filter((segment) => !(segment.kind === 'day' && segment.dayIndex === state.dayIndex))
+    : []
+
+  // 图例：日模式=当日日色；总览=逐日色 + 跨日/未分配中性色；实/虚线独立说明。
+  if (state.viewMode === 'day') {
+    const entry = make('span', 'legend-line')
+    const chip = make('i', 'legend-chip')
+    chip.style.backgroundColor = DAY_COLOR(state.dayIndex)
+    entry.appendChild(chip)
+    appendText(entry, `${DAY_LABEL(state.dayIndex)} 路线/停留`)
+    legend.appendChild(entry)
+  } else {
+    state.data.itinerary.days.forEach((_day, dayIndex) => {
+      const entry = make('span', 'legend-line')
+      const chip = make('i', 'legend-chip')
+      chip.style.backgroundColor = DAY_COLOR(dayIndex)
+      entry.appendChild(chip)
+      appendText(entry, `DAY ${String(dayIndex + 1).padStart(2, '0')}`)
+      legend.appendChild(entry)
+    })
+  }
+  if (state.routeView.crossDayCount > 0) {
+    const entry = make('span', 'legend-line')
+    const chip = make('i', 'legend-chip')
+    chip.style.backgroundColor = '#47566b'
+    entry.appendChild(chip)
+    appendText(entry, '跨日衔接')
+    legend.appendChild(entry)
+  }
+  if (state.routeView.unassignedCount > 0) {
+    const entry = make('span', 'legend-line')
+    const chip = make('i', 'legend-chip')
+    chip.style.backgroundColor = '#93a1b3'
+    entry.appendChild(chip)
+    appendText(entry, '日归属未分配')
+    legend.appendChild(entry)
+  }
+  legend.appendChild(make('span', 'legend-line solid', '道路几何'))
+  legend.appendChild(make('span', 'legend-line dashed', '直线示意/估算'))
+
+  const appendLegButton = (segment: RouteSegment, index: number, separate: boolean): void => {
+    const button = make('button', `leg-button${separate ? ' separate' : ''}`)
+    button.type = 'button'
+    button.dataset.legId = segment.leg.id
+    const marker = make('span', 'leg-index', String(index + 1))
+    marker.style.backgroundColor = segment.color
+    button.appendChild(marker)
+    const copy = make('span', 'leg-copy')
+    appendText(copy, `${segment.leg.fromPlaceId} → ${segment.leg.toPlaceId}`, 'leg-route')
+    appendText(copy, segment.metricText, 'leg-metric')
+    if (separate) {
+      appendText(copy, segment.kind === 'cross-day' ? '跨日衔接 · 总览展示' : '日归属未分配', 'leg-note')
+    }
+    if (segment.note !== undefined) appendText(copy, segment.note, 'leg-note')
+    else if (segment.leg.geometryStatus === 'queried') appendText(copy, `轨迹来源：${segment.leg.provider ?? segment.leg.geometry?.source ?? '路线渠道'}`, 'leg-note')
+    button.appendChild(copy)
+    button.addEventListener('mouseenter', () => selectLeg(state, segment.leg.id, false))
+    button.addEventListener('mouseover', () => selectLeg(state, segment.leg.id, false))
+    button.addEventListener('click', () => selectLeg(state, segment.leg.id, true))
+    button.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLeg(state, segment.leg.id, true) }
+      if (event.key === 'Escape') { state.selectedLegId = undefined; updateSelectionClasses(state) }
+    })
+    list.appendChild(button)
+  }
+  visibleSegments.forEach((segment, index) => appendLegButton(segment, index, false))
+  if (separateSegments.length > 0) {
+    const groupNote = make('div', 'leg-group-note')
+    appendText(groupNote, `跨日/未归属（${separateSegments.length} 段，总览展示）`, 'muted small')
+    list.appendChild(groupNote)
+    separateSegments.forEach((segment, index) => appendLegButton(segment, index, true))
+  }
+  if (state.segments.length === 0) list.appendChild(make('div', 'notice', '暂无可绘制道路几何；不可用/阻断路段不伪装为道路。'))
+}
+
+// ────────────────────────── 视图状态机 ──────────────────────────
 
 function updateSelectionClasses(state: PageState): void {
   document.querySelectorAll<HTMLElement>('[data-selection-key]').forEach((element) => {
@@ -710,45 +1010,146 @@ function updateSelectionClasses(state: PageState): void {
   for (const handle of state.routeHandles) handle.setActive(handle.id === state.selectedLegId)
 }
 
+function measureOcclusion(): OcclusionPadding {
+  const rectOf = (id: string): DOMRect | undefined => {
+    const element = byId<HTMLElement>(id)
+    if (element === undefined || element.classList.contains('hidden')) return undefined
+    const rect = element.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0 ? rect : undefined
+  }
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
+  const overview = rectOf('overviewCard')
+  const tabs = rectOf('dayTabs')
+  const side = rectOf('timelineCard')
+  const drawer = rectOf('dayDrawer')
+  const dock = rectOf('bottomDock')
+  return computeOcclusionPadding({
+    viewportWidth,
+    viewportHeight,
+    top: Math.max(overview?.height ?? 0, tabs !== undefined ? tabs.bottom : 0),
+    left: Math.max(overview?.width ?? 0, side?.width ?? 0),
+    right: document.body.dataset.drawer === 'open' ? drawer?.width ?? 0 : 0,
+    bottom: dock?.height ?? 0,
+  })
+}
+
+/** 应用当前视图的可见性（不重建 SDK/overlay；只翻转可见性与取景）。 */
+function applyView(state: PageState, options: { fit?: boolean } = {}): void {
+  const visibleStopKeys = computeMapVisibility({
+    markerDays: state.stops.filter((stop) => stop.point !== undefined).map((stop) => ({ key: stop.key, dayIndex: stop.dayIndex })),
+    legs: state.routeView.legs.map((leg) => ({ id: leg.legId, kind: leg.kind, dayIndex: leg.dayIndex })),
+    viewMode: state.viewMode,
+    dayIndex: state.dayIndex,
+  })
+  let visibleMarkers = 0
+  for (const handle of state.markerHandles) {
+    const visible = handle.keys.some((key) => visibleStopKeys.markerKeys.has(key))
+    handle.setVisible(visible)
+    if (visible) visibleMarkers += 1
+  }
+  let visibleLegs = 0
+  for (const handle of state.routeHandles) {
+    const visible = visibleStopKeys.legIds.has(handle.id)
+    handle.setVisible(visible)
+    if (visible) visibleLegs += 1
+  }
+  state.switchCount += 1
+  setDataset('viewMode', state.viewMode)
+  setDataset('dayIndex', String(state.dayIndex))
+  setDataset('visibleMarkers', String(visibleMarkers))
+  setDataset('visibleLegs', String(visibleLegs))
+  setDataset('separateLegs', String(visibleStopKeys.separateLegIds.size))
+  setDataset('switchCount', String(state.switchCount))
+  if (options.fit === true && state.map !== undefined) {
+    state.map.fitVisibleBounds(measureOcclusion(), { maxZoom: 17, animate: !reducedMotion() })
+  }
+}
+
+function setDrawerOpen(state: PageState, open: boolean): void {
+  state.drawerOpen = open
+  const drawer = byId<HTMLElement>('dayDrawer')
+  const toggle = byId<HTMLButtonElement>('drawerToggle')
+  drawer?.classList.toggle('open', open)
+  toggle?.setAttribute('aria-expanded', String(open))
+  setDataset('drawer', open ? 'open' : 'closed')
+}
+
+function selectOverview(state: PageState, userTriggered: boolean): void {
+  state.viewMode = 'overview'
+  // 回总览恢复全部，不残留旧日期选择。
+  state.selectedKey = undefined
+  state.lockedKey = undefined
+  state.selectedLegId = undefined
+  renderDayTabs(state)
+  renderSidePanel(state)
+  renderDetail(state)
+  renderRoutePanel(state)
+  renderDock(state)
+  updateSelectionClasses(state)
+  applyView(state, { fit: userTriggered })
+  setDataset('selectionLocked', 'false')
+}
+
 function selectDay(state: PageState, dayIndex: number, userTriggered: boolean): void {
   if (dayIndex < 0 || dayIndex >= state.data.itinerary.days.length) return
+  state.viewMode = 'day'
   state.dayIndex = dayIndex
-  const day = state.data.itinerary.days[dayIndex]
   const first = state.stops.find((stop) => stop.dayIndex === dayIndex)
-  if (first !== undefined) state.selectedKey = first.key
-  renderTimeline(state)
-  renderDayDrawer(state)
+  state.selectedKey = first?.key
+  state.selectedLegId = undefined
+  renderDayTabs(state)
+  renderSidePanel(state)
+  renderDetail(state)
+  renderRoutePanel(state)
+  renderDock(state)
   updateSelectionClasses(state)
-  if (userTriggered) flyToDay(state, dayIndex)
-  if (window.innerWidth <= 760) {
-    state.drawerOpen = true
-    const drawer = byId<HTMLElement>('dayDrawer')
-    const toggle = byId<HTMLButtonElement>('drawerToggle')
-    drawer?.classList.add('open')
-    toggle?.setAttribute('aria-expanded', 'true')
-  }
-  void day
+  applyView(state, { fit: userTriggered })
+  if (userTriggered && window.innerWidth <= 760) setDrawerOpen(state, true)
 }
 
 function selectStop(state: PageState, key: StopKey, lock: boolean): void {
   const model = stopByKey(state, key)
   if (model === undefined) return
-  state.dayIndex = model.dayIndex
+  if (state.viewMode === 'day' && model.dayIndex !== state.dayIndex) {
+    // 单日模式选到别日 stop → 切到该日（视野/筛选一致）。
+    selectDay(state, model.dayIndex, true)
+    return
+  }
+  state.lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
   state.selectedKey = key
   if (lock) state.lockedKey = key
-  renderDayDrawer(state)
-  renderStopPopover(state, model)
-  // Hover updates the card without replacing the focused list node; click/keyboard
-  // locking may rebuild the day track to move the active-day affordance.
-  if (lock) renderTimeline(state)
+  renderDetail(state)
+  // 左侧列表不重建（避免打断键盘焦点）；active 态由 updateSelectionClasses 翻转。
   updateSelectionClasses(state)
-  if (window.innerWidth <= 760) {
-    state.drawerOpen = true
-    byId<HTMLElement>('dayDrawer')?.classList.add('open')
-    byId<HTMLButtonElement>('drawerToggle')?.setAttribute('aria-expanded', 'true')
-  }
+  if (lock && window.innerWidth <= 760) setDrawerOpen(state, true)
   setDataset('selection', key)
   setDataset('selectionLocked', lock ? 'true' : String(state.lockedKey !== undefined))
+}
+
+function clearSelection(state: PageState): void {
+  const previousKey = state.selectedKey
+  const previousFocus = state.lastFocus
+  state.lockedKey = undefined
+  state.selectedKey = undefined
+  state.selectedLegId = undefined
+  renderDetail(state)
+  updateSelectionClasses(state)
+  setDataset('selectionLocked', 'false')
+  // 焦点返回：列表不重建时直接回原节点；若曾重建（切日等），按 selection-key 找新节点。
+  const restoreKey = previousFocus?.dataset?.selectionKey ?? previousKey
+  // 焦点返回：优先回原节点（未重建时仍连接）；重建后按 selection-key 找地图区域外的新节点。
+  let focusTarget: HTMLElement | undefined
+  if (previousFocus !== undefined && previousFocus.isConnected) {
+    focusTarget = previousFocus
+  } else if (restoreKey !== undefined) {
+    const candidates = Array.from(document.querySelectorAll<HTMLElement>(`[data-selection-key="${CSS.escape(restoreKey)}"]`))
+    for (const candidate of candidates) {
+      if (candidate.closest('#map') === null) { focusTarget = candidate; break }
+    }
+  }
+  state.lastFocus = undefined
+  if (focusTarget !== undefined && focusTarget.isConnected) focusTarget.focus()
 }
 
 function selectLeg(state: PageState, id: string, lock: boolean): void {
@@ -787,29 +1188,8 @@ function handleSelectionKey(state: PageState, key: StopKey, event: KeyboardEvent
     selectStop(state, key, true)
   } else if (event.key === 'Escape') {
     event.preventDefault()
-    state.lockedKey = undefined
-    state.selectedKey = undefined
-    renderStopPopover(state, undefined)
-    updateSelectionClasses(state)
-    setDataset('selectionLocked', 'false')
+    clearSelection(state)
   }
-}
-
-function flyToDay(state: PageState, dayIndex: number): void {
-  if (state.map === undefined) return
-  const points = state.stops.filter((stop) => stop.dayIndex === dayIndex && stop.point !== undefined).map((stop) => stop.point as DisplayPoint)
-  if (points.length === 0) return
-  const center = points.reduce((sum, point) => ({ lng: sum.lng + point.lng / points.length, lat: sum.lat + point.lat / points.length }), { lng: 0, lat: 0 })
-  const target: [number, number] = [center.lat, center.lng]
-  const animated = !reducedMotion()
-  const map = state.map.map
-  if (state.data.map.provider === 'amap') {
-    if (animated && map.setCenter !== undefined) map.setCenter([center.lng, center.lat], 9, { animate: true })
-    else map.setCenter?.([center.lng, center.lat], 9, { animate: false })
-  } else if (animated && map.flyTo !== undefined) map.flyTo(target, 9, { animate: true })
-  else map.setView?.(target, 9, { animate: false })
-  setDataset('lastFlyDay', String(dayIndex))
-  setDataset('motion', animated ? 'animated-by-user' : 'reduced')
 }
 
 function playDay(state: PageState): void {
@@ -826,6 +1206,8 @@ function playDay(state: PageState): void {
     }, offset * (reducedMotion() ? 20 : 260))
   }
 }
+
+// ────────────────────────── 地图适配器（AMap / Leaflet 统一契约） ──────────────────────────
 
 function createMapPin(model: MarkerModel): HTMLElement {
   const pin = make('button', model.cluster ? 'cluster-pin' : 'map-pin', model.label)
@@ -853,18 +1235,21 @@ function mapViewBounds(points: DisplayPoint[]): { minLng: number; minLat: number
   }), { minLng: points[0].lng, minLat: points[0].lat, maxLng: points[0].lng, maxLat: points[0].lat })
 }
 
+function amapOcclusionAvoid(padding: OcclusionPadding): [number, number, number, number] {
+  // setFitView 的 avoid 顺序按 [上, 右, 下, 左]（JSAPI 2.0）；live QA 以截图复核。
+  return [padding.top, padding.right, padding.bottom, padding.left]
+}
+
 function buildMapAdapter(state: PageState, provider: 'amap' | 'leaflet' = currentProvider(state.data)): MapHandle | undefined {
   const mapElement = byId<HTMLElement>('map')
-  if (mapElement === undefined || state.markerModels.length === 0) return undefined
-  const points = state.markerModels.map((marker) => marker.point)
-  const bounds = mapViewBounds(points)
-  const center = points.reduce((sum, point) => ({ lng: sum.lng + point.lng / points.length, lat: sum.lat + point.lat / points.length }), { lng: 0, lat: 0 })
+  if (mapElement === undefined || !hasMappableContent(state.markerModels.length)) return undefined
   const handles: MarkerHandle[] = []
   const routes: RouteHandle[] = []
   if (provider === 'amap') {
     const amap = typeof AMap === 'undefined' ? undefined : AMap
     if (amap === undefined) throw new Error('AMap SDK 未加载')
-    const map = new amap.Map(mapElement, { center: [center.lng, center.lat], zoom: 6, viewMode: '2D' })
+    // 官方 light 预设（不新增自定义样式 ID/配置面）。
+    const map = new amap.Map(mapElement, { center: [116.397, 39.909], zoom: 6, viewMode: '2D', mapStyle: 'amap://styles/light' })
     // 控件是可选增强：JSAPI 2.0 的 `plugin=` URL 参数不保证注册 AMap.Scale/ToolBar，
     // 实测 AMap.Map 可用而 AMap.Scale===undefined。旧实现 `new amap.Scale()` 直接抛
     // 「c.Scale is not a constructor」把整张地图拖垮——这里改为特性探测 + 显式 plugin
@@ -886,18 +1271,23 @@ function buildMapAdapter(state: PageState, provider: 'amap' | 'leaflet' = curren
     } else {
       addOptionalControls()
     }
-    const infoWindow = new amap.InfoWindow({ offset: new amap.Pixel(0, -28), autoMove: true })
+    const polylineByLegId = new Map<string, AMapPolyline>()
+    const markerOverlayByHandle = new Map<MarkerHandle, AMapMarker>()
     for (const model of state.markerModels) {
       const pin = createMapPin(model)
       const marker = new amap.Marker({ position: [model.point.lng, model.point.lat], content: pin, offset: new amap.Pixel(0, 0), zIndex: model.cluster ? 90 : 120 })
       marker.setMap(map)
+      pin.classList.add('marker-hidden')
       const handle: MarkerHandle = {
         key: model.key,
         keys: model.keys,
+        dayIndex: model.dayIndex,
+        visible: false,
+        setVisible: (visible) => { pin.classList.toggle('marker-hidden', !visible); handle.visible = visible },
         setActive: (active) => pin.classList.toggle('active', active),
         setDimmed: (dimmed) => { pin.style.opacity = dimmed ? '0.28' : '1' },
-        open: () => { infoWindow.setContent(byId<HTMLElement>('mapPopover') ?? pin); infoWindow.open(map, marker.getPosition()) },
       }
+      markerOverlayByHandle.set(handle, marker)
       pin.addEventListener('mouseenter', () => scheduleHover(state, model.keys[0]))
       pin.addEventListener('mouseover', () => scheduleHover(state, model.keys[0]))
       pin.addEventListener('mouseleave', () => cancelHover(state))
@@ -911,21 +1301,40 @@ function buildMapAdapter(state: PageState, provider: 'amap' | 'leaflet' = curren
       if (segment.path.length < 2) continue
       const line = new amap.Polyline({
         path: segment.path.map((point) => [point.lng, point.lat]),
-        strokeColor: DAY_COLOR(segment.leg.orderIndex), strokeWeight: segment.dashed ? 3 : 4,
+        strokeColor: segment.color, strokeWeight: segment.dashed ? 3 : 4,
         strokeOpacity: .78, strokeStyle: segment.dashed ? 'dashed' : 'solid', lineJoin: 'round',
       })
       map.add(line)
-      routes.push({ id: segment.leg.id, setActive: (active) => line.setOptions({ strokeWeight: active ? 7 : segment.dashed ? 3 : 4, strokeOpacity: active ? 1 : .78 }) })
+      line.hide()
+      const handle: RouteHandle = {
+        id: segment.leg.id,
+        kind: segment.kind,
+        ...(segment.dayIndex !== undefined ? { dayIndex: segment.dayIndex } : {}),
+        visible: false,
+        setVisible: (visible) => { if (visible) line.show(); else line.hide(); handle.visible = visible },
+        setActive: (active) => line.setOptions({ strokeWeight: active ? 7 : segment.dashed ? 3 : 4, strokeOpacity: active ? 1 : .78 }),
+      }
+      routes.push(handle)
+      polylineByLegId.set(segment.leg.id, line)
     }
-    if (bounds !== undefined) map.setBounds(new amap.Bounds(new amap.LngLat(bounds.minLng, bounds.minLat), new amap.LngLat(bounds.maxLng, bounds.maxLat)))
-    return { map, markers: handles, routes }
+    const fitVisibleBounds: MapHandle['fitVisibleBounds'] = (padding, options) => {
+      // setFitView 需要真实 overlay 实例（SDK 内部调 getBounds）——传 handle 会崩。
+      const visibleOverlays: unknown[] = []
+      for (const handle of handles) if (handle.visible) visibleOverlays.push(markerOverlayByHandle.get(handle))
+      for (const handle of routes) visibleOverlays.push(polylineByLegId.get(handle.id))
+      const overlays = visibleOverlays.filter((overlay) => overlay !== undefined)
+      if (overlays.length === 0) return
+      map.setFitView(overlays, options?.animate === true ? false : true, amapOcclusionAvoid(padding), options?.maxZoom ?? 17)
+    }
+    return { provider, markers: handles, routes, fitVisibleBounds }
   }
 
   const leaflet = typeof L === 'undefined' ? undefined : L
   if (leaflet === undefined) throw new Error('Leaflet SDK 未加载')
-  const map = leaflet.map(mapElement).setView([center.lat, center.lng], 6)
+  const map = leaflet.map(mapElement).setView([36.6, 101.8], 6)
   leaflet.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map)
   leaflet.control.scale().addTo(map)
+  const lineByLegId = new Map<string, LeafletLine>()
   for (const model of state.markerModels) {
     // Leaflet receives an empty icon shell; the visible pin and its label are
     // created as DOM nodes so itinerary text never crosses an HTML parser.
@@ -935,25 +1344,33 @@ function buildMapAdapter(state: PageState, provider: 'amap' | 'leaflet' = curren
       const wrapper = marker.getElement()
       if (wrapper === undefined || wrapper.querySelector('.map-pin, .cluster-pin') !== null) return
       const pin = createMapPin(model)
+      pin.classList.add('marker-hidden')
       wrapper.appendChild(pin)
       pin.addEventListener('mouseenter', () => scheduleHover(state, model.keys[0]))
       pin.addEventListener('mouseover', () => scheduleHover(state, model.keys[0]))
       pin.addEventListener('mouseleave', () => cancelHover(state))
       pin.addEventListener('click', () => selectStop(state, model.keys[0], true))
       pin.addEventListener('keydown', (event) => handleSelectionKey(state, model.keys[0], event))
+      if (handle.visible) pin.classList.remove('marker-hidden')
     }
     const handle: MarkerHandle = {
       key: model.key,
       keys: model.keys,
+      dayIndex: model.dayIndex,
+      visible: false,
+      setVisible: (visible) => {
+        handle.visible = visible
+        marker.setOpacity(visible ? 1 : 0)
+        const element = marker.getElement()?.querySelector<HTMLElement>('.map-pin, .cluster-pin')
+        element?.classList.toggle('marker-hidden', !visible)
+        if (visible) element?.classList.remove('marker-hidden')
+      },
       setActive: (active) => { const element = marker.getElement()?.querySelector<HTMLElement>('.map-pin, .cluster-pin'); element?.classList.toggle('active', active) },
-      setDimmed: (dimmed) => marker.setOpacity(dimmed ? .28 : 1),
-      open: () => marker.openPopup(),
+      setDimmed: (dimmed) => marker.setOpacity(dimmed ? .28 : handle.visible ? 1 : 0),
     }
     marker.on('mouseover', () => scheduleHover(state, model.keys[0]))
     marker.on('mouseout', () => cancelHover(state))
     marker.on('click', () => selectStop(state, model.keys[0], true))
-    marker.bindPopup(make('div', 'map-popover', ''))
-    marker.getPopup()?.setContent(byId<HTMLElement>('mapPopover') ?? make('div', undefined, model.cluster ? `${model.label} 个行程点` : model.label))
     mountPin()
     window.setTimeout(mountPin, 0)
     handles.push(handle)
@@ -961,78 +1378,137 @@ function buildMapAdapter(state: PageState, provider: 'amap' | 'leaflet' = curren
   for (const segment of state.segments) {
     if (segment.path.length < 2) continue
     const line = leaflet.polyline(segment.path.map((point) => [point.lat, point.lng] as [number, number]), {
-      color: DAY_COLOR(segment.leg.orderIndex), weight: segment.dashed ? 3 : 4, opacity: .78, dashArray: segment.dashed ? '8 7' : undefined,
+      color: segment.color, weight: segment.dashed ? 3 : 4, opacity: .78, dashArray: segment.dashed ? '8 7' : undefined,
     }).addTo(map)
-    routes.push({ id: segment.leg.id, setActive: (active) => line.setStyle({ weight: active ? 7 : segment.dashed ? 3 : 4, opacity: active ? 1 : .78 }) })
+    line.setStyle({ opacity: 0 })
+    const handle: RouteHandle = {
+      id: segment.leg.id,
+      kind: segment.kind,
+      ...(segment.dayIndex !== undefined ? { dayIndex: segment.dayIndex } : {}),
+      visible: false,
+      setVisible: (visible) => {
+        handle.visible = visible
+        line.setStyle({ opacity: visible ? .78 : 0, ...(visible ? {} : { interactive: false }) })
+      },
+      setActive: (active) => line.setStyle({ weight: active ? 7 : segment.dashed ? 3 : 4, opacity: handle.visible ? (active ? 1 : .78) : 0 }),
+    }
+    routes.push(handle)
+    lineByLegId.set(segment.leg.id, line)
   }
-  if (bounds !== undefined) map.fitBounds([[bounds.minLat, bounds.minLng], [bounds.maxLat, bounds.maxLng]], { padding: [22, 22] })
-  return { map, markers: handles, routes }
+  const fitVisibleBounds: MapHandle['fitVisibleBounds'] = (padding, options) => {
+    const points: DisplayPoint[] = []
+    for (const handle of handles) {
+      if (!handle.visible) continue
+      const model = state.markerModels.find((candidate) => candidate.key === handle.key)
+      if (model !== undefined) points.push(model.point)
+    }
+    for (const handle of routes) {
+      if (!handle.visible) continue
+      const segment = state.segments.find((candidate) => candidate.leg.id === handle.id)
+      points.push(...segment?.path ?? [])
+    }
+    const bounds = mapViewBounds(points)
+    if (bounds === undefined) return
+    map.fitBounds(
+      [[bounds.minLat, bounds.minLng], [bounds.maxLat, bounds.maxLng]],
+      {
+        paddingTopLeft: [padding.left, padding.top],
+        paddingBottomRight: [padding.right, padding.bottom],
+        ...(options?.animate === false ? { animate: false } : {}),
+        maxZoom: options?.maxZoom ?? 17,
+      },
+    )
+  }
+  return { provider, markers: handles, routes, fitVisibleBounds }
 }
 
-function renderLegList(state: PageState): void {
-  const list = byId<HTMLElement>('legList')
-  const legend = byId<HTMLElement>('routeLegend')
-  if (list === undefined || legend === undefined) return
-  clear(list)
-  clear(legend)
-  legend.appendChild(make('span', 'legend-line', '道路几何'))
-  legend.appendChild(make('span', 'legend-line dashed', '直线示意/估算'))
-  for (const [index, segment] of state.segments.entries()) {
-    const button = make('button', 'leg-button')
-    button.type = 'button'
-    button.dataset.legId = segment.leg.id
-    const marker = make('span', 'leg-index', String(index + 1))
-    marker.style.backgroundColor = DAY_COLOR(segment.leg.orderIndex)
-    button.appendChild(marker)
-    const copy = make('span', 'leg-copy')
-    appendText(copy, `${segment.leg.fromPlaceId} → ${segment.leg.toPlaceId}`, 'leg-route')
-    appendText(copy, segment.metricText, 'leg-metric')
-    if (segment.note !== undefined) appendText(copy, segment.note, 'leg-note')
-    else if (segment.leg.geometryStatus === 'queried') appendText(copy, `轨迹来源：${segment.leg.provider ?? segment.leg.geometry?.source ?? '路线渠道'}`, 'leg-note')
-    button.appendChild(copy)
-    button.addEventListener('mouseenter', () => selectLeg(state, segment.leg.id, false))
-    button.addEventListener('mouseover', () => selectLeg(state, segment.leg.id, false))
-    button.addEventListener('click', () => selectLeg(state, segment.leg.id, true))
-    button.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectLeg(state, segment.leg.id, true) }
-      if (event.key === 'Escape') { state.selectedLegId = undefined; updateSelectionClasses(state) }
+function renderMapControls(state: PageState): void {
+  const toolbar = byId<HTMLElement>('mapToolbar')
+  if (toolbar === undefined) return
+  const providerText = state.data.map?.provider === 'amap' ? '高德 JSAPI 2.0 · light' : 'Leaflet 1.9 + OSM'
+  const provider = byId<HTMLElement>('mapProviderLabel')
+  if (provider !== undefined) provider.textContent = providerText
+  const drawerToggle = byId<HTMLButtonElement>('drawerToggle')
+  const drawer = byId<HTMLElement>('dayDrawer')
+  if (drawerToggle !== undefined && drawer !== undefined) {
+    drawerToggle.addEventListener('click', () => {
+      setDrawerOpen(state, !state.drawerOpen)
     })
-    list.appendChild(button)
   }
-  if (state.segments.length === 0) list.appendChild(make('div', 'notice', '暂无可绘制道路几何；不可用/阻断路段不伪装为道路。'))
 }
 
-/** 统一状态构建：provider 决定坐标投影（amap=GCJ-02 / leaflet=WGS-84）与路线几何。 */
-function createState(data: RenderPageData, provider: 'amap' | 'leaflet'): PageState {
+function renderWarnings(state: PageState): void {
+  const strip = byId<HTMLElement>('mapWarnStrip')
+  if (strip === undefined) return
+  const warnings = [...(state.data.map?.warnings ?? [])]
+  if (warnings.length === 0) {
+    strip.classList.add('hidden')
+    return
+  }
+  strip.textContent = `⚠ ${warnings.join('；')}`
+  strip.classList.remove('hidden')
+}
+
+/** 统一状态构建：provider 决定坐标投影（amap=GCJ-02 / leaflet=WGS-84）与路线几何。
+ * 导出仅供 render-map-view 单测消费；浏览器 bundle（IIFE）会忽略导出。 */
+export function createState(data: RenderPageData, provider: 'amap' | 'leaflet', ui: Partial<PageUiState> = {}): PageState {
   const stops = flattenStops(data, provider)
   const markerResult = deterministicMarkerModels(stops)
+  const routeView = buildRouteView(data.itinerary.days, data.routeTransport?.legs, data.itinerary.canonicalRoute)
   return {
-    data, stops, markerModels: markerResult.models, segments: routeSegments(data, stops, provider),
-    markerHandles: [], routeHandles: [], dayIndex: 0, drawerOpen: false,
+    data,
+    stops,
+    markerModels: markerResult.models,
+    segments: routeSegments(data, stops, routeView, provider),
+    routeView,
+    markerHandles: [],
+    routeHandles: [],
+    map: undefined,
+    viewMode: ui.viewMode ?? 'overview',
+    dayIndex: ui.dayIndex ?? 0,
+    ...(ui.selectedKey !== undefined ? { selectedKey: ui.selectedKey } : {}),
+    ...(ui.lockedKey !== undefined ? { lockedKey: ui.lockedKey } : {}),
+    ...(ui.selectedLegId !== undefined ? { selectedLegId: ui.selectedLegId } : {}),
+    drawerOpen: ui.drawerOpen ?? false,
+    hoverTimer: undefined,
+    lastFocus: undefined,
+    switchCount: 0,
   }
 }
 
 /**
  * amap 不可用 → 就地降级 Leaflet。
  * 必须整体重建 stops/markerModels/segments：amap 用 GCJ-02 投影、Leaflet/OSM 需要
- * WGS-84，沿用旧点位会整体偏移约 500m。返回 false = 当前并非 amap 视图（不重复降级）。
+ * WGS-84，沿用旧点位会整体偏移约 500m。视图状态（总览/单日/选择）原样保留，
+ * 地图重建后按原视图重新应用可见性。返回 false = 当前并非 amap 视图（不重复降级）。
  */
 function degradeToLeaflet(state: PageState, reason: string): boolean {
   if (currentProvider(state.data) !== 'amap') return false
   const warnings = [...(state.data.map?.warnings ?? []), `高德地图不可用（${reason}），已自动降级 Leaflet/OSM`]
-  const degraded = createState({ ...state.data, map: { ...state.data.map, provider: 'leaflet', warnings } }, 'leaflet')
+  const degraded = createState(
+    { ...state.data, map: { ...state.data.map, provider: 'leaflet', warnings } },
+    'leaflet',
+    {
+      viewMode: state.viewMode,
+      dayIndex: state.dayIndex,
+      ...(state.selectedKey !== undefined ? { selectedKey: state.selectedKey } : {}),
+      ...(state.lockedKey !== undefined ? { lockedKey: state.lockedKey } : {}),
+      ...(state.selectedLegId !== undefined ? { selectedLegId: state.selectedLegId } : {}),
+      drawerOpen: state.drawerOpen,
+    },
+  )
   state.data = degraded.data
   state.stops = degraded.stops
   state.markerModels = degraded.markerModels
   state.segments = degraded.segments
+  state.routeView = degraded.routeView
   state.map = undefined
   state.markerHandles = []
   state.routeHandles = []
   setDataset('provider', 'leaflet')
   setDataset('amapFallback', 'true')
   renderWarnings(state)
-  renderMapControls(state)
-  renderLegList(state)
+  renderRoutePanel(state)
   return true
 }
 
@@ -1043,6 +1519,7 @@ function loadLeafletFallback(state: PageState, reason: string): void {
   loadJs('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', () => {
     initMap(state, 'leaflet')
     if (typeof L !== 'undefined') setMapStatus(`高德地图不可用（${reason}），已自动降级 Leaflet/OSM。`, 'warning')
+    applyView(state, { fit: true })
   }, () => {
     setDataset('mapReady', 'leaflet-loader-error')
     setMapStatus('高德地图不可用，且 Leaflet SDK 加载失败（网络不可达）；保留静态日程列表。', 'warning')
@@ -1056,6 +1533,7 @@ function initMap(state: PageState, provider: 'amap' | 'leaflet' = currentProvide
     if (state.map === undefined) {
       setMapStatus('暂无带坐标的行程点位，已保留静态日程列表。')
       setDataset('mapReady', 'no-coordinates')
+      renderRoutePanel(state)
       return
     }
     state.markerHandles = state.map.markers
@@ -1064,7 +1542,8 @@ function initMap(state: PageState, provider: 'amap' | 'leaflet' = currentProvide
     setDataset('markers', String(state.markerModels.length))
     setDataset('stops', String(state.stops.length))
     setDataset('clustered', state.markerModels.length < state.stops.filter((stop) => stop.point !== undefined).length ? 'true' : 'false')
-    renderLegList(state)
+    applyView(state, { fit: true })
+    renderRoutePanel(state)
     updateSelectionClasses(state)
     const status = byId<HTMLElement>('mapStatus')
     if (status !== undefined && state.data.map.warnings.length === 0) status.classList.add('hidden')
@@ -1081,10 +1560,12 @@ function initMap(state: PageState, provider: 'amap' | 'leaflet' = currentProvide
     clearSkeleton()
     setDataset('mapReady', `${provider}-error`)
     setMapStatus(`地图初始化失败：${message}；静态日程仍可用。`, 'warning')
-    renderLegList(state)
+    renderRoutePanel(state)
     console.log(`[dsh-travel] map error: ${message}`)
   }
 }
+
+// ────────────────────────── 补充信息卡（全量内容） ──────────────────────────
 
 function renderInsightsSection(data: RenderPageData): void {
   const card = byId<HTMLElement>('insightsCard')
@@ -1161,17 +1642,10 @@ function renderAdvice(data: RenderPageData): void {
   if (advice === undefined) { card.classList.add('hidden'); return }
   card.classList.remove('hidden')
   if (advice.weather.length > 0) {
-    appendHeading(body, 'h3', '天气')
-    const strip = make('div', 'weather-strip')
-    for (const weather of advice.weather) {
-      const item = make('div', 'weather-item')
-      appendText(item, weather.date, 'weather-date')
-      if (weather.tempRange?.length === 2) appendText(item, `${weather.tempRange[0]}~${weather.tempRange[1]}°C`, 'weather-temp')
-      if (weather.dayForecast !== undefined) appendText(item, weather.dayForecast)
-      if (weather.beyondForecastWindow === true) appendText(item, '气候概况', 'muted')
-      strip.appendChild(item)
-    }
-    body.appendChild(strip)
+    appendHeading(body, 'h3', '逐地天气')
+    appendWeatherLines(body, advice.weather)
+  } else {
+    appendText(body, '缺失/下一步：暂无天气数据。', 'next-step')
   }
   if (advice.clothing.length > 0) appendText(body, `穿衣：${advice.clothing.join('；')}`, 'data-item-body')
   if (advice.packingList.length > 0) appendText(body, `物品：${advice.packingList.join('；')}`, 'data-item-body')
@@ -1199,6 +1673,7 @@ function renderRentalCost(data: RenderPageData): void {
     for (const [key, value] of Object.entries(data.cost.components ?? {})) {
       appendText(body, `${key}：${value.min}~${value.max} ${value.currency ?? '币种未明确'}（${value.status}）`, 'data-item-body')
     }
+    for (const assumption of data.cost.assumptions ?? []) appendText(body, `假设：${assumption}`, 'muted small')
   }
 }
 
@@ -1211,6 +1686,31 @@ function renderDegraded(data: RenderPageData): void {
   appendText(strip, '⚠ 数据降级说明', 'data-item-title')
   for (const entry of data.degraded) appendText(strip, `· ${entry.source} [${entry.code}]：${entry.reason}`, 'data-item-body')
 }
+
+/** 打印用线性完整行程：逐日全部 stops（textContent，屏上隐藏，@media print 显示）。 */
+function renderPrintItinerary(data: RenderPageData): void {
+  const section = byId<HTMLElement>('printItinerary')
+  if (section === undefined) return
+  clear(section)
+  appendHeading(section, 'h2', '完整行程')
+  data.itinerary.days.forEach((day, dayIndex) => {
+    const dayBox = make('div', 'print-day')
+    appendHeading(dayBox, 'h3', `${DAY_LABEL(dayIndex)} · ${day.date}${day.theme !== undefined ? ` · ${day.theme}` : ''}`)
+    const list = make('ol', 'print-stops')
+    for (const stop of day.stops) {
+      const line = make('li')
+      const meta = `${CATEGORY_LABEL[stop.category] ?? stop.category}${stop.durationHint !== undefined ? ` · 建议 ${stop.durationHint} 分钟` : ''}${stop.placeId === undefined ? '' : ` · ${stop.placeId}`}`
+      appendText(line, `${stop.name}（${meta}）`)
+      list.appendChild(line)
+    }
+    dayBox.appendChild(list)
+    const meals = day.meals ?? []
+    if (meals.length > 0) appendText(dayBox, `餐食：${meals.map((meal) => meal.name).join('、')}`, 'muted small print-meals')
+    section.appendChild(dayBox)
+  })
+}
+
+// ────────────────────────── 加载与启动 ──────────────────────────
 
 function loadCss(href: string, onerror: () => void): void {
   const link = make('link')
@@ -1245,7 +1745,7 @@ function startLoader(state: PageState): void {
     }, () => {
       setDataset('mapReady', 'amap-loader-error')
       setMapStatus('高德地图 SDK 加载失败（网络不可达或 key 无效），尝试降级 Leaflet/OSM。', 'warning')
-      renderLegList(state)
+      renderRoutePanel(state)
       // SDK 整体加载失败同样走 Leaflet 降级（不再只剩静态列表）。
       loadLeafletFallback(state, 'SDK 加载失败')
     })
@@ -1255,7 +1755,7 @@ function startLoader(state: PageState): void {
   loadJs('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', () => initMap(state), () => {
     setDataset('mapReady', 'leaflet-loader-error')
     setMapStatus('Leaflet SDK 加载失败（网络不可达），保留静态日程列表。', 'warning')
-    renderLegList(state)
+    renderRoutePanel(state)
   })
 }
 
@@ -1275,11 +1775,13 @@ function bootPage(): void {
   const state = createState(data, provider)
   const markerResult = { clustered: state.markerModels.length < state.stops.filter((stop) => stop.point !== undefined).length }
   renderOverview(state)
-  renderWarnings(state)
-  renderTimeline(state)
-  renderDayDrawer(state)
+  renderDayTabs(state)
+  renderSidePanel(state)
+  renderDetail(state)
   renderMapControls(state)
-  renderLegList(state)
+  renderRoutePanel(state)
+  renderWarnings(state)
+  renderDock(state)
   renderInsightsSection(data)
   renderInsightGroup(data, 'foodCard', 'foodBody', 'guide', false)
   renderInsightGroup(data, 'lodgingCard', 'lodgingBody', 'recommend', false)
@@ -1288,38 +1790,44 @@ function bootPage(): void {
   renderAdvice(data)
   renderRentalCost(data)
   renderDegraded(data)
+  renderPrintItinerary(data)
   renderSkeleton(state)
   setDataset('motion', reducedMotion() ? 'reduced' : 'full')
   setDataset('provider', provider)
+  setDataset('drawer', 'closed')
+  applyView(state)
   if (markerResult.clustered) setMapStatus('点位超过 200 个，地图已启用确定性聚合；左侧列表保留全部点位。')
   startLoader(state)
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return
-    state.lockedKey = undefined
-    state.selectedKey = undefined
-    state.selectedLegId = undefined
-    renderStopPopover(state, undefined)
-    updateSelectionClasses(state)
-    setDataset('selectionLocked', 'false')
+    clearSelection(state)
   })
-  window.__dshTravel = { state, selectStop: (key: string) => selectStop(state, key, true), selectDay: (index: number) => selectDay(state, index, true) }
+  window.__dshTravel = {
+    state,
+    selectStop: (key: string) => selectStop(state, key, true),
+    selectDay: (index: number) => selectDay(state, index, true),
+    selectOverview: () => selectOverview(state, true),
+  }
 }
 
 // Kept as explicit contract markers for the structure tests and rendered-page audit:
 // AMap.Map / AMap.Marker / AMap.Polyline / AMap.InfoWindow; L.marker / L.polyline;
 // function activateDay is represented by selectDay; routeTransport is rendered by renderRouteTransport.
-function renderRouteTransport(state: PageState): void { renderLegList(state) }
+function renderRouteTransport(state: PageState): void { renderRoutePanel(state) }
 function activateDay(state: PageState, index: number): void { selectDay(state, index, true) }
 void renderRouteTransport
 void activateDay
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootPage, { once: true })
-else bootPage()
+// 浏览器入口；node 单测（render-map-view）导入本模块时不触发 DOM 初始化。
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootPage, { once: true })
+  else bootPage()
+}
 
 declare global {
   interface Window {
     _AMapSecurityConfig?: { securityJsCode?: string; serviceHost?: string }
-    __dshTravel?: { state: PageState; selectStop: (key: string) => void; selectDay: (index: number) => void }
+    __dshTravel?: { state: PageState; selectStop: (key: string) => void; selectDay: (index: number) => void; selectOverview: () => void }
   }
   const AMap: AMapLike | undefined
   const L: LeafletLike | undefined
@@ -1329,7 +1837,6 @@ interface AMapLike {
   Map: new (element: HTMLElement, options: Record<string, unknown>) => AMapMap
   Marker: new (options: Record<string, unknown>) => AMapMarker
   Polyline: new (options: Record<string, unknown>) => AMapPolyline
-  InfoWindow: new (options: Record<string, unknown>) => AMapInfoWindow
   Pixel: new (x: number, y: number) => unknown
   LngLat: new (lng: number, lat: number) => unknown
   Bounds: new (southWest: unknown, northEast: unknown) => unknown
@@ -1344,6 +1851,8 @@ interface AMapMap {
   add(layer: unknown): void
   setBounds(bounds: unknown): void
   setCenter(center: [number, number], zoom?: number, options?: { animate?: boolean }): void
+  /** 遮挡感知取景：可见 overlay + avoid（[上,右,下,左] px）+ maxZoom。 */
+  setFitView(overlays: unknown[], immediately?: boolean, avoid?: [number, number, number, number], maxZoom?: number): void
 }
 interface AMapMarker {
   setMap(map: AMapMap): void
@@ -1352,10 +1861,8 @@ interface AMapMarker {
 }
 interface AMapPolyline {
   setOptions(options: Record<string, unknown>): void
-}
-interface AMapInfoWindow {
-  setContent(content: unknown): void
-  open(map: AMapMap, position: unknown): void
+  show(): void
+  hide(): void
 }
 interface LeafletLike {
   map(element: HTMLElement): LeafletMap
@@ -1373,9 +1880,6 @@ interface LeafletMarker {
   addTo(map: LeafletMap): LeafletMarker
   on(event: string, handler: () => void): void
   getElement(): HTMLElement | undefined
-  openPopup(): void
-  bindPopup(content: unknown): LeafletMarker
-  getPopup(): { setContent(content: unknown): void } | undefined
   setOpacity(opacity: number): void
 }
 interface LeafletLine {

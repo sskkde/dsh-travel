@@ -1,0 +1,1248 @@
+{
+ "renderedAt": "2026-10-01T00:00:00.000Z",
+ "request": {
+  "planId": "map-first-fixture",
+  "mode": "plan",
+  "status": "delivered",
+  "slots": {
+   "destination": "青甘环线（fixture）",
+   "dateStart": "2026-10-01",
+   "dateEnd": "2026-10-10",
+   "days": 10,
+   "travelers": {
+    "adults": 2
+   },
+   "budget": {
+    "amount": 6000,
+    "currency": "CNY",
+    "scope": "total"
+   }
+  },
+  "assumptions": [
+   "fixture 假设：示例数据仅用于渲染验收"
+  ],
+  "createdAt": "2026-10-01T00:00:00.000Z",
+  "updatedAt": "2026-10-01T00:00:00.000Z"
+ },
+ "itinerary": {
+  "itineraryId": "map-first-fixture-itinerary",
+  "schemaVersion": 2,
+  "days": [
+   {
+    "date": "2026-10-01",
+    "stops": [
+     {
+      "name": "P0段起点",
+      "placeId": "place-p0",
+      "occurrenceId": "occ-p0-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 96.6,
+       "lat": 37.5,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p0"
+      ]
+     },
+     {
+      "name": "P1段终点（宿）",
+      "placeId": "place-p1",
+      "occurrenceId": "occ-p1-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 96.81,
+       "lat": 37.63,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p1"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第1程"
+   },
+   {
+    "date": "2026-10-02",
+    "stops": [
+     {
+      "name": "P1段起点",
+      "placeId": "place-p1",
+      "occurrenceId": "occ-p1-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 97.02,
+       "lat": 37.760000000000005,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p1"
+      ]
+     },
+     {
+      "name": "P2段终点（宿）",
+      "placeId": "place-p2",
+      "occurrenceId": "occ-p2-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 97.23,
+       "lat": 37.89,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p2"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第2程"
+   },
+   {
+    "date": "2026-10-03",
+    "stops": [
+     {
+      "name": "P2段起点",
+      "placeId": "place-p2",
+      "occurrenceId": "occ-p2-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 97.44,
+       "lat": 38.02,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p2"
+      ]
+     },
+     {
+      "name": "P3段终点（宿）",
+      "placeId": "place-p3",
+      "occurrenceId": "occ-p3-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 97.65,
+       "lat": 38.150000000000006,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p3"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第3程"
+   },
+   {
+    "date": "2026-10-04",
+    "stops": [
+     {
+      "name": "P3段起点",
+      "placeId": "place-p3",
+      "occurrenceId": "occ-p3-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 97.86,
+       "lat": 38.28,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p3"
+      ]
+     },
+     {
+      "name": "P4段终点（宿）",
+      "placeId": "place-p4",
+      "occurrenceId": "occ-p4-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 98.07,
+       "lat": 38.410000000000004,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p4"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第4程"
+   },
+   {
+    "date": "2026-10-05",
+    "stops": [
+     {
+      "name": "P4段起点",
+      "placeId": "place-p4",
+      "occurrenceId": "occ-p4-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 98.28,
+       "lat": 38.540000000000006,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p4"
+      ]
+     },
+     {
+      "name": "P5段终点（宿）",
+      "placeId": "place-p5",
+      "occurrenceId": "occ-p5-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 98.49,
+       "lat": 38.67,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p5"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第5程"
+   },
+   {
+    "date": "2026-10-06",
+    "stops": [
+     {
+      "name": "P5段起点",
+      "placeId": "place-p5",
+      "occurrenceId": "occ-p5-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 98.7,
+       "lat": 38.800000000000004,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p5"
+      ]
+     },
+     {
+      "name": "P6段终点（宿）",
+      "placeId": "place-p6",
+      "occurrenceId": "occ-p6-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 98.91,
+       "lat": 38.93,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p6"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第6程"
+   },
+   {
+    "date": "2026-10-07",
+    "stops": [
+     {
+      "name": "P6段起点",
+      "placeId": "place-p6",
+      "occurrenceId": "occ-p6-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 99.12,
+       "lat": 39.06,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p6"
+      ]
+     },
+     {
+      "name": "P7段终点（宿）",
+      "placeId": "place-p7",
+      "occurrenceId": "occ-p7-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 99.33,
+       "lat": 39.190000000000005,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p7"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第7程"
+   },
+   {
+    "date": "2026-10-08",
+    "stops": [
+     {
+      "name": "P7段起点",
+      "placeId": "place-p7",
+      "occurrenceId": "occ-p7-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 99.54,
+       "lat": 39.32,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p7"
+      ]
+     },
+     {
+      "name": "P8段终点（宿）",
+      "placeId": "place-p8",
+      "occurrenceId": "occ-p8-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 99.75,
+       "lat": 39.45,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p8"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第8程"
+   },
+   {
+    "date": "2026-10-09",
+    "stops": [
+     {
+      "name": "P8段起点",
+      "placeId": "place-p8",
+      "occurrenceId": "occ-p8-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 99.96,
+       "lat": 39.580000000000005,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p8"
+      ]
+     },
+     {
+      "name": "P9段终点（宿）",
+      "placeId": "place-p9",
+      "occurrenceId": "occ-p9-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 100.17,
+       "lat": 39.71,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p9"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第9程"
+   },
+   {
+    "date": "2026-10-10",
+    "stops": [
+     {
+      "name": "P9段起点",
+      "placeId": "place-p9",
+      "occurrenceId": "occ-p9-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 100.38,
+       "lat": 39.84,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-p9"
+      ]
+     },
+     {
+      "name": "P10段终点（宿）",
+      "placeId": "place-p10",
+      "occurrenceId": "occ-p10-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 100.59,
+       "lat": 39.970000000000006,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "lodging",
+      "intelRefs": [
+       "intel-place-p10"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "第10程"
+   }
+  ],
+  "routeCheck": {
+   "issues": [],
+   "warnings": []
+  },
+  "canonicalRoute": {
+   "schemaVersion": 2,
+   "fingerprint": "075c827cbd548224c70f17c48a159c803ceb89b4673f7612e0327dfa1dea04e5",
+   "nodes": [
+    {
+     "occurrenceId": "occ-p0-0",
+     "placeId": "place-p0",
+     "dayIndex": 0,
+     "stopIndex": 0
+    },
+    {
+     "occurrenceId": "occ-p1-0",
+     "placeId": "place-p1",
+     "dayIndex": 0,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p2-0",
+     "placeId": "place-p2",
+     "dayIndex": 1,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p3-0",
+     "placeId": "place-p3",
+     "dayIndex": 2,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p4-0",
+     "placeId": "place-p4",
+     "dayIndex": 3,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p5-0",
+     "placeId": "place-p5",
+     "dayIndex": 4,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p6-0",
+     "placeId": "place-p6",
+     "dayIndex": 5,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p7-0",
+     "placeId": "place-p7",
+     "dayIndex": 6,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p8-0",
+     "placeId": "place-p8",
+     "dayIndex": 7,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p9-0",
+     "placeId": "place-p9",
+     "dayIndex": 8,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-p10-0",
+     "placeId": "place-p10",
+     "dayIndex": 9,
+     "stopIndex": 1
+    }
+   ],
+   "edges": [
+    {
+     "id": "edge-0",
+     "fromOccurrenceId": "occ-p0-0",
+     "toOccurrenceId": "occ-p1-0",
+     "orderIndex": 0
+    },
+    {
+     "id": "edge-1",
+     "fromOccurrenceId": "occ-p1-0",
+     "toOccurrenceId": "occ-p2-0",
+     "orderIndex": 1
+    },
+    {
+     "id": "edge-2",
+     "fromOccurrenceId": "occ-p2-0",
+     "toOccurrenceId": "occ-p3-0",
+     "orderIndex": 2
+    },
+    {
+     "id": "edge-3",
+     "fromOccurrenceId": "occ-p3-0",
+     "toOccurrenceId": "occ-p4-0",
+     "orderIndex": 3
+    },
+    {
+     "id": "edge-4",
+     "fromOccurrenceId": "occ-p4-0",
+     "toOccurrenceId": "occ-p5-0",
+     "orderIndex": 4
+    },
+    {
+     "id": "edge-5",
+     "fromOccurrenceId": "occ-p5-0",
+     "toOccurrenceId": "occ-p6-0",
+     "orderIndex": 5
+    },
+    {
+     "id": "edge-6",
+     "fromOccurrenceId": "occ-p6-0",
+     "toOccurrenceId": "occ-p7-0",
+     "orderIndex": 6
+    },
+    {
+     "id": "edge-7",
+     "fromOccurrenceId": "occ-p7-0",
+     "toOccurrenceId": "occ-p8-0",
+     "orderIndex": 7
+    },
+    {
+     "id": "edge-8",
+     "fromOccurrenceId": "occ-p8-0",
+     "toOccurrenceId": "occ-p9-0",
+     "orderIndex": 8
+    },
+    {
+     "id": "edge-9",
+     "fromOccurrenceId": "occ-p9-0",
+     "toOccurrenceId": "occ-p10-0",
+     "orderIndex": 9
+    }
+   ]
+  }
+ },
+ "intel": {},
+ "degraded": [],
+ "map": {
+  "provider": "leaflet",
+  "warnings": []
+ },
+ "routeTransport": {
+  "legs": [
+   {
+    "id": "leg-0-place-p0-place-p1",
+    "fromPlaceId": "place-p0",
+    "toPlaceId": "place-p1",
+    "orderIndex": 0,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 82,
+    "durationMinutes": 70,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       94,
+       36
+      ],
+      [
+       94.15,
+       36.1
+      ],
+      [
+       94.3,
+       36.2
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-1-place-p1-place-p2",
+    "fromPlaceId": "place-p1",
+    "toPlaceId": "place-p2",
+    "orderIndex": 1,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 99,
+    "durationMinutes": 81,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       94.3,
+       36.2
+      ],
+      [
+       94.45,
+       36.300000000000004
+      ],
+      [
+       94.6,
+       36.400000000000006
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-2-place-p2-place-p3",
+    "fromPlaceId": "place-p2",
+    "toPlaceId": "place-p3",
+    "orderIndex": 2,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 116,
+    "durationMinutes": 92,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       94.6,
+       36.4
+      ],
+      [
+       94.75,
+       36.5
+      ],
+      [
+       94.89999999999999,
+       36.6
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-3-place-p3-place-p4",
+    "fromPlaceId": "place-p3",
+    "toPlaceId": "place-p4",
+    "orderIndex": 3,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 133,
+    "durationMinutes": 103,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       94.9,
+       36.6
+      ],
+      [
+       95.05000000000001,
+       36.7
+      ],
+      [
+       95.2,
+       36.800000000000004
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-4-place-p4-place-p5",
+    "fromPlaceId": "place-p4",
+    "toPlaceId": "place-p5",
+    "orderIndex": 4,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 150,
+    "durationMinutes": 114,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       95.2,
+       36.8
+      ],
+      [
+       95.35000000000001,
+       36.9
+      ],
+      [
+       95.5,
+       37
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-5-place-p5-place-p6",
+    "fromPlaceId": "place-p5",
+    "toPlaceId": "place-p6",
+    "orderIndex": 5,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 167,
+    "durationMinutes": 125,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       95.5,
+       37
+      ],
+      [
+       95.65,
+       37.1
+      ],
+      [
+       95.8,
+       37.2
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-6-place-p6-place-p7",
+    "fromPlaceId": "place-p6",
+    "toPlaceId": "place-p7",
+    "orderIndex": 6,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 184,
+    "durationMinutes": 136,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       95.8,
+       37.2
+      ],
+      [
+       95.95,
+       37.300000000000004
+      ],
+      [
+       96.1,
+       37.400000000000006
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-7-place-p7-place-p8",
+    "fromPlaceId": "place-p7",
+    "toPlaceId": "place-p8",
+    "orderIndex": 7,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 201,
+    "durationMinutes": 147,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       96.1,
+       37.4
+      ],
+      [
+       96.25,
+       37.5
+      ],
+      [
+       96.39999999999999,
+       37.6
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-8-place-p8-place-p9",
+    "fromPlaceId": "place-p8",
+    "toPlaceId": "place-p9",
+    "orderIndex": 8,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 218,
+    "durationMinutes": 158,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       96.4,
+       37.6
+      ],
+      [
+       96.55000000000001,
+       37.7
+      ],
+      [
+       96.7,
+       37.800000000000004
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   },
+   {
+    "id": "leg-9-place-p9-place-p10",
+    "fromPlaceId": "place-p9",
+    "toPlaceId": "place-p10",
+    "orderIndex": 9,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 235,
+    "durationMinutes": 169,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       96.7,
+       37.8
+      ],
+      [
+       96.85000000000001,
+       37.9
+      ],
+      [
+       97,
+       38
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   }
+  ],
+  "totalDistanceKm": 1585,
+  "totalDurationMinutes": 1195,
+  "fingerprint": "075c827cbd548224c70f17c48a159c803ceb89b4673f7612e0327dfa1dea04e5"
+ },
+ "insights": [
+  {
+   "id": "ins-recommend",
+   "kind": "recommend",
+   "text": "茶卡盐湖建议清晨进入，避开大风时段",
+   "scope": "place",
+   "scopeRef": "place-chaka",
+   "citations": [
+    {
+     "title": "盐湖攻略",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/chaka"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  },
+  {
+   "id": "ins-avoid",
+   "kind": "avoid",
+   "text": "翡翠湖岸边风大，注意保暖与防滑",
+   "scope": "place",
+   "scopeRef": "place-feicui",
+   "citations": [
+    {
+     "title": "翡翠湖提示",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/feicui"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  },
+  {
+   "id": "ins-guide",
+   "kind": "guide",
+   "text": "高原行程首日少洗澡、多喝水",
+   "scope": "region",
+   "scopeRef": "青甘",
+   "citations": [
+    {
+     "title": "高原指南",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/plateau"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  },
+  {
+   "id": "ins-plan",
+   "kind": "plan",
+   "text": "每日驾驶预留 1 小时机动时间",
+   "scope": "theme",
+   "scopeRef": "自驾",
+   "citations": [
+    {
+     "title": "自驾规划",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/drive"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  }
+ ],
+ "advice": {
+  "weather": [
+   {
+    "date": "2026-10-01",
+    "dayForecast": "晴",
+    "tempRange": [
+     2,
+     14
+    ],
+    "temperatureBasis": "forecast",
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "placeId": "place-xining",
+    "location": "西宁"
+   },
+   {
+    "date": "2026-10-02",
+    "dayForecast": "晴",
+    "tempRange": [
+     2,
+     14
+    ],
+    "temperatureBasis": "forecast",
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "placeId": "place-chaka",
+    "location": "茶卡"
+   },
+   {
+    "date": "2026-10-03",
+    "dayForecast": "晴",
+    "tempRange": [
+     2,
+     14
+    ],
+    "temperatureBasis": "historical",
+    "beyondForecastWindow": true,
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "placeId": "place-feicui",
+    "location": "翡翠湖"
+   }
+  ],
+  "clothing": [
+   "防风外套",
+   "防晒帽"
+  ],
+  "packingList": [
+   "保温水壶",
+   "墨镜"
+  ],
+  "extraTips": [
+   "加油站间距大，见站补油"
+  ]
+ },
+ "transport": [
+  {
+   "mode": "rail",
+   "segments": [
+    {
+     "from": "出发地",
+     "to": "西宁",
+     "no": "G999",
+     "depart": "07:30",
+     "arrive": "12:00"
+    }
+   ],
+   "totalPriceRange": [
+    260,
+    520
+   ],
+   "currency": "CNY",
+   "durationMinutes": 270,
+   "source": {
+    "platform": "fixture-web",
+    "url": "https://example.invalid/fixture",
+    "fetchedAt": "2026-10-01T00:00:00.000Z"
+   }
+  }
+ ],
+ "rentalQuotes": {
+  "schemaVersion": 2,
+  "placesVersion": 1,
+  "inputFingerprint": "fixture",
+  "generatedAt": "2026-10-01T00:00:00.000Z",
+  "quotes": [
+   {
+    "vehicleType": "SUV（fixture）",
+    "days": 3,
+    "quote": {
+     "range": [
+      350,
+      420
+     ],
+     "currency": "CNY",
+     "unit": "day",
+     "observedAt": "2026-10-01T00:00:00.000Z",
+     "taxStatus": "unknown"
+    },
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "pickupPlaceId": "place-xining"
+   }
+  ],
+  "records": [
+   {
+    "placeId": "place-xining",
+    "status": "quoted"
+   }
+  ],
+  "degraded": [],
+  "consultationOnly": true,
+  "disclaimer": "租车信息为咨询级、非实时、不可预订（fixture）"
+ },
+ "cost": {
+  "schemaVersion": 2,
+  "placesVersion": 1,
+  "inputFingerprint": "fixture",
+  "generatedAt": "2026-10-01T00:00:00.000Z",
+  "currency": "CNY",
+  "components": {
+   "intercityTransport": {
+    "min": 520,
+    "max": 1040,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "quoted",
+    "assumptions": []
+   },
+   "rental": {
+    "min": 1050,
+    "max": 1260,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "quoted",
+    "assumptions": [
+     "含保险（fixture）"
+    ]
+   },
+   "lodging": {
+    "min": 900,
+    "max": 1500,
+    "currency": "USD",
+    "source": "fixture-foreign",
+    "status": "estimated",
+    "assumptions": [
+     "外币报价原样展示，不换算"
+    ]
+   },
+   "tickets": {
+    "min": 300,
+    "max": 300,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "quoted",
+    "assumptions": []
+   },
+   "food": {
+    "min": 600,
+    "max": 900,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "estimated",
+    "assumptions": [
+     "按人均估算"
+    ]
+   },
+   "misc": {
+    "min": 0,
+    "max": 0,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "unavailable",
+    "assumptions": [
+     "暂无数据，不计入总数"
+    ]
+   }
+  },
+  "total": {
+   "min": 3370,
+   "max": 5000,
+   "currency": "CNY"
+  },
+  "warnings": [
+   "misc 组件无可用数据（fixture）"
+  ],
+  "assumptions": [
+   "fixture 成本均为示例"
+  ]
+ },
+ "artifactStatus": {
+  "itinerary": {
+   "version": 2,
+   "state": "current"
+  },
+  "intel": {
+   "version": 1,
+   "state": "current"
+  },
+  "places": {
+   "version": 1,
+   "state": "current"
+  },
+  "transport": {
+   "version": 1,
+   "state": "current"
+  },
+  "advice": {
+   "version": 1,
+   "state": "current"
+  },
+  "insights": {
+   "version": 1,
+   "state": "current"
+  },
+  "rental": {
+   "version": 1,
+   "state": "current"
+  },
+  "cost": {
+   "version": 1,
+   "state": "current"
+  },
+  "route-transport": {
+   "version": 1,
+   "state": "current"
+  }
+ }
+}

@@ -1,0 +1,218 @@
+{
+ "renderedAt": "2026-10-01T00:00:00.000Z",
+ "request": {
+  "planId": "map-first-fixture",
+  "mode": "plan",
+  "status": "delivered",
+  "slots": {
+   "destination": "青甘环线（fixture）",
+   "dateStart": "2026-10-01",
+   "dateEnd": "2026-10-02",
+   "days": 2,
+   "travelers": {
+    "adults": 2
+   },
+   "budget": {
+    "amount": 6000,
+    "currency": "CNY",
+    "scope": "total"
+   }
+  },
+  "assumptions": [
+   "fixture 假设：示例数据仅用于渲染验收"
+  ],
+  "createdAt": "2026-10-01T00:00:00.000Z",
+  "updatedAt": "2026-10-01T00:00:00.000Z"
+ },
+ "itinerary": {
+  "itineraryId": "map-first-fixture-itinerary",
+  "schemaVersion": 2,
+  "days": [
+   {
+    "date": "2026-10-01",
+    "stops": [
+     {
+      "name": "<img src=x onerror=window.pwned=1>恶意点",
+      "placeId": "place-xss",
+      "occurrenceId": "occ-xss-0",
+      "category": "attraction",
+      "intelRefs": [
+       "intel-place-xss"
+      ]
+     },
+     {
+      "name": "正常点",
+      "placeId": "place-ok",
+      "occurrenceId": "occ-ok-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 102.48,
+       "lat": 41.14,
+       "sys": "GCJ02"
+      },
+      "intelRefs": [
+       "intel-place-ok"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "恶意输入"
+   },
+   {
+    "date": "2026-10-02",
+    "stops": [
+     {
+      "name": "未解析点",
+      "placeId": "place-unresolved",
+      "occurrenceId": "occ-unres-0",
+      "category": "attraction",
+      "intelRefs": [
+       "intel-place-unresolved"
+      ]
+     },
+     {
+      "name": "终点",
+      "placeId": "place-end",
+      "occurrenceId": "occ-end-0",
+      "category": "attraction",
+      "intelRefs": [
+       "intel-place-end"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "缺数据"
+   }
+  ],
+  "routeCheck": {
+   "issues": [],
+   "warnings": []
+  },
+  "canonicalRoute": {
+   "schemaVersion": 2,
+   "fingerprint": "4e8461631c76e418398e7fd59a17146b90e873562f081f5685eeb3a2c11fd2e7",
+   "nodes": [
+    {
+     "occurrenceId": "occ-xss-0",
+     "placeId": "place-xss",
+     "dayIndex": 0,
+     "stopIndex": 0
+    },
+    {
+     "occurrenceId": "occ-ok-0",
+     "placeId": "place-ok",
+     "dayIndex": 0,
+     "stopIndex": 1
+    },
+    {
+     "occurrenceId": "occ-unres-0",
+     "placeId": "place-unresolved",
+     "dayIndex": 1,
+     "stopIndex": 0
+    },
+    {
+     "occurrenceId": "occ-end-0",
+     "placeId": "place-end",
+     "dayIndex": 1,
+     "stopIndex": 1
+    }
+   ],
+   "edges": [
+    {
+     "id": "edge-0",
+     "fromOccurrenceId": "occ-xss-0",
+     "toOccurrenceId": "occ-ok-0",
+     "orderIndex": 0
+    },
+    {
+     "id": "edge-1",
+     "fromOccurrenceId": "occ-ok-0",
+     "toOccurrenceId": "occ-unres-0",
+     "orderIndex": 1
+    },
+    {
+     "id": "edge-2",
+     "fromOccurrenceId": "occ-unres-0",
+     "toOccurrenceId": "occ-end-0",
+     "orderIndex": 2
+    }
+   ]
+  }
+ },
+ "intel": {},
+ "degraded": [
+  {
+   "source": "fixture/amap",
+   "code": "UNAVAILABLE",
+   "reason": "fixture：路线渠道全部失败（示例）",
+   "at": "2026-10-01T00:00:00.000Z"
+  }
+ ],
+ "map": {
+  "provider": "leaflet",
+  "warnings": []
+ },
+ "insights": [
+  {
+   "id": "ins-xss",
+   "kind": "guide",
+   "text": "<script>window.pwned=1</script>只作为文本展示",
+   "scope": "region",
+   "scopeRef": "任意",
+   "citations": [
+    {
+     "title": "javascript:alert(1) 来源",
+     "platform": "fixture-web",
+     "url": "javascript:alert(1)"
+    },
+    {
+     "title": "正常来源",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/ok"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  }
+ ],
+ "artifactStatus": {
+  "itinerary": {
+   "version": 2,
+   "state": "current"
+  },
+  "intel": {
+   "version": 1,
+   "state": "stale"
+  },
+  "places": {
+   "version": 0,
+   "state": "missing"
+  },
+  "advice": {
+   "version": 1,
+   "state": "failed"
+  },
+  "insights": {
+   "version": 2,
+   "state": "current"
+  },
+  "route-transport": {
+   "version": 0,
+   "state": "empty"
+  },
+  "cost": {
+   "version": 0,
+   "state": "missing"
+  }
+ }
+}

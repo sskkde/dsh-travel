@@ -153,9 +153,13 @@ describe('render 模板', () => {
     for (const id of ['mainGrid', 'mapCard', 'timelineCard', 'dayDrawer', 'drawerToggle', 'legList', 'insightsCard', 'degradedStrip']) {
       expect(template, `T6 新结构缺 ${id}`).toContain(`id="${id}"`)
     }
-    // 结构断言从旧的一次性长列表迁移到模块化 bundle/CSS：不弱化八区，
-    // 另外锁住 65% 地图主面、移动抽屉及 reduced-motion 样式入口。
-    expect(styles).toContain('grid-template-columns: minmax(210px, 250px) minmax(0, 1fr)')
+    // 地图优先（map-first-output）：全视口地图铺底 + 顶部 tabs/左侧摘要/右侧详情/
+    // 底部摘要入口；切日不重建地图（可见性由 route-view/map-view 投影）。
+    for (const id of ['dayTabs', 'routePanel', 'routeLegend', 'bottomDock', 'supplementalGrid']) {
+      expect(template, `map-first 结构缺 ${id}`).toContain(`id="${id}"`)
+    }
+    expect(styles).toContain('#mapCard { position: absolute; inset: 0')
+    expect(styles).toContain('.map-stage')
     expect(styles).toContain('.drawer-toggle')
     expect(styles).toContain('@media (prefers-reduced-motion: reduce)')
     expect(template).toContain('__PAGE_BUNDLE__')

@@ -29,37 +29,64 @@
   .src-link { display: inline }
   }
 -->
+<!--
+  地图优先最终输出页（.omo/drafts/map-first-output.md）结构契约：
+  * 全视口真实地图铺底（#mapCard > #map），信息浮层叠加：顶部 #overviewCard（标题/导出/
+    工件状态）+ #dayTabs（总览/日切换，aria-pressed）、左侧 #timelineCard（总览摘要/单日时间轴）、
+    右侧 #dayDrawer（唯一详情面板：景点详情或当日摘要）、右下 #routePanel（#routeLegend + #legList）、
+    底部 #bottomDock（天气/交通/预算/提醒摘要 + 更多信息入口）；
+  * 视图状态 viewMode=overview|day 与 selectedStop 解耦；可见性/取景由 page/route-view.ts +
+    page/map-view.ts 投影（canonical 边唯一匹配，跨日/未分配中性色单独入口，不混入当日统计）；
+  * AMap 使用官方 light 预设（mapStyle: amap://styles/light，无自定义样式 ID/配置面），
+    Leaflet 保留 OSM 底图与署名；两 provider 各自保留地图操作与署名，不承诺底图像素一致；
+  * fitVisibleBounds 按浮层遮挡取景（AMap setFitView avoid / Leaflet fitBounds padding）；
+  * 切日只翻转可见性，不重建 SDK、不重复注册事件、不重新请求路线；
+  * @media print 输出线性完整行程/指南/来源（见 page/styles.css），浮层定位与交互控件隐藏。
+-->
 <style id="page-styles">__PAGE_STYLES__</style>
 </head>
-<body>
-<main id="app" class="page-shell">
-  <section id="overviewCard" class="page-card">
-    <div id="exportBar" class="overview-actions">
-      <button id="btnDownloadJson" class="action-button" type="button">下载 JSON</button>
-      <button id="btnDownloadMarkdown" class="action-button" type="button">下载 Markdown</button>
-      <button id="btnPrintPdf" class="action-button" type="button">打印/PDF</button>
-    </div>
-  </section>
-
-  <div id="mainGrid">
-    <aside id="timelineCard" class="page-card" aria-label="日程轨道"></aside>
-
-    <section id="mapCard" class="page-card" aria-label="行程地图">
-      <div id="mapToolbar" class="map-toolbar">
-        <h2 class="map-title">地图与道路路线</h2>
-        <span id="mapProviderLabel" class="muted small"></span>
-      </div>
+<body data-view-mode="overview">
+<main id="app" class="page-shell map-first">
+  <div id="mainGrid" class="map-stage">
+    <section id="mapCard" aria-label="行程地图">
+      <div id="map" aria-label="行程地图画布"></div>
       <div id="mapWarnStrip" class="hidden" role="status"></div>
       <div id="mapStatus" class="notice" role="status">地图骨架点位加载中……</div>
-      <div id="map" aria-label="行程地图画布"></div>
-      <div id="routeLegend" aria-label="路线图例"></div>
-      <div id="legList" aria-label="逐段道路距离与时长"></div>
+      <div id="mapToolbar" class="map-toolbar">
+        <span id="mapProviderLabel" class="muted small"></span>
+      </div>
     </section>
 
-    <aside id="dayDrawer" class="page-card mobile-drawer" data-mobile-drawer="true">
-      <button id="drawerToggle" class="drawer-toggle" type="button" aria-expanded="false" aria-controls="dayCard">当日卡片</button>
-      <section id="dayCard" aria-label="当日推荐与指南"></section>
-    </aside>
+    <div class="overlay-column left-stack">
+      <header id="overviewCard" class="page-card top-panel" aria-label="行程标题与导出">
+        <div id="exportBar" class="overview-actions">
+          <button id="btnDownloadJson" class="action-button" type="button">下载 JSON</button>
+          <button id="btnDownloadMarkdown" class="action-button" type="button">下载 Markdown</button>
+          <button id="btnPrintPdf" class="action-button" type="button">打印/PDF</button>
+        </div>
+      </header>
+
+      <aside id="timelineCard" class="page-card side-panel" aria-label="日程摘要与时间轴"></aside>
+    </div>
+
+    <nav id="dayTabs" class="day-tabs overlay-panel" aria-label="总览与日期切换"></nav>
+
+    <div class="overlay-column right-stack">
+      <aside id="dayDrawer" class="page-card detail-panel" data-mobile-drawer="true" aria-label="景点与当日详情">
+        <button id="drawerToggle" class="drawer-toggle" type="button" aria-expanded="false" aria-controls="dayCard">详情</button>
+        <section id="dayCard" aria-label="当日与景点详情"></section>
+      </aside>
+
+      <section id="routePanel" class="page-card route-panel" aria-label="路线图例与逐段列表">
+        <div id="routeLegend" aria-label="路线图例"></div>
+        <details id="legDetails">
+          <summary>逐段路线与里程</summary>
+          <div id="legList" aria-label="逐段道路距离与时长"></div>
+        </details>
+      </section>
+    </div>
+
+    <div id="bottomDock" class="bottom-dock overlay-panel" aria-label="行程摘要入口"></div>
   </div>
 
   <div id="supplementalGrid">
@@ -93,6 +120,8 @@
     </section>
     <section id="degradedStrip" class="hidden" role="status"></section>
   </div>
+
+  <section id="printItinerary" aria-label="打印用线性完整行程"></section>
 </main>
 <footer>由 dsh-travel 生成 · <span id="mapFooter">地图归属由页面引擎显示</span> · 单文件行程页</footer>
 

@@ -1,0 +1,467 @@
+{
+ "renderedAt": "2026-10-01T00:00:00.000Z",
+ "request": {
+  "planId": "map-first-fixture",
+  "mode": "plan",
+  "status": "delivered",
+  "slots": {
+   "destination": "青甘环线（fixture）",
+   "dateStart": "2026-10-01",
+   "dateEnd": "2026-10-01",
+   "days": 1,
+   "travelers": {
+    "adults": 2
+   },
+   "budget": {
+    "amount": 6000,
+    "currency": "CNY",
+    "scope": "total"
+   }
+  },
+  "assumptions": [
+   "fixture 假设：示例数据仅用于渲染验收"
+  ],
+  "createdAt": "2026-10-01T00:00:00.000Z",
+  "updatedAt": "2026-10-01T00:00:00.000Z"
+ },
+ "itinerary": {
+  "itineraryId": "map-first-fixture-itinerary",
+  "schemaVersion": 2,
+  "days": [
+   {
+    "date": "2026-10-01",
+    "stops": [
+     {
+      "name": "西宁集合",
+      "placeId": "place-xining",
+      "occurrenceId": "occ-xining-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 94.71,
+       "lat": 36.330000000000005,
+       "sys": "GCJ02"
+      },
+      "anchorRole": "arrival",
+      "durationHint": 60,
+      "intelRefs": [
+       "intel-place-xining"
+      ]
+     },
+     {
+      "name": "塔尔寺",
+      "placeId": "place-taer",
+      "occurrenceId": "occ-taer-0",
+      "category": "attraction",
+      "coords": {
+       "lng": 94.92,
+       "lat": 36.46,
+       "sys": "GCJ02"
+      },
+      "durationHint": 120,
+      "intelRefs": [
+       "intel-place-taer"
+      ]
+     }
+    ],
+    "meals": [
+     {
+      "name": "当日简餐"
+     }
+    ],
+    "theme": "首日适应"
+   }
+  ],
+  "routeCheck": {
+   "issues": [],
+   "warnings": []
+  },
+  "canonicalRoute": {
+   "schemaVersion": 2,
+   "fingerprint": "dbf9059a769d256f9a0dd225f27433e8619623ce3831446e7970e32bd8ebee66",
+   "nodes": [
+    {
+     "occurrenceId": "occ-xining-0",
+     "placeId": "place-xining",
+     "dayIndex": 0,
+     "stopIndex": 0
+    },
+    {
+     "occurrenceId": "occ-taer-0",
+     "placeId": "place-taer",
+     "dayIndex": 0,
+     "stopIndex": 1
+    }
+   ],
+   "edges": [
+    {
+     "id": "edge-0",
+     "fromOccurrenceId": "occ-xining-0",
+     "toOccurrenceId": "occ-taer-0",
+     "orderIndex": 0
+    }
+   ]
+  }
+ },
+ "intel": {},
+ "degraded": [],
+ "map": {
+  "provider": "leaflet",
+  "warnings": []
+ },
+ "routeTransport": {
+  "legs": [
+   {
+    "id": "leg-0-place-xining-place-taer",
+    "fromPlaceId": "place-xining",
+    "toPlaceId": "place-taer",
+    "orderIndex": 0,
+    "placesVersion": 1,
+    "mode": "driving",
+    "status": "queried",
+    "metricStatus": "queried",
+    "geometryStatus": "queried",
+    "distanceKm": 82,
+    "durationMinutes": 70,
+    "provider": "fixture",
+    "observedAt": "2026-10-01T00:00:00.000Z",
+    "geometry": {
+     "type": "LineString",
+     "coordinates": [
+      [
+       94,
+       36
+      ],
+      [
+       94.15,
+       36.1
+      ],
+      [
+       94.3,
+       36.2
+      ]
+     ],
+     "source": "fixture",
+     "coordinateSystem": "WGS84",
+     "pointOrder": "lng,lat"
+    }
+   }
+  ],
+  "totalDistanceKm": 82,
+  "totalDurationMinutes": 70,
+  "fingerprint": "dbf9059a769d256f9a0dd225f27433e8619623ce3831446e7970e32bd8ebee66"
+ },
+ "insights": [
+  {
+   "id": "ins-recommend",
+   "kind": "recommend",
+   "text": "茶卡盐湖建议清晨进入，避开大风时段",
+   "scope": "place",
+   "scopeRef": "place-chaka",
+   "citations": [
+    {
+     "title": "盐湖攻略",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/chaka"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  },
+  {
+   "id": "ins-avoid",
+   "kind": "avoid",
+   "text": "翡翠湖岸边风大，注意保暖与防滑",
+   "scope": "place",
+   "scopeRef": "place-feicui",
+   "citations": [
+    {
+     "title": "翡翠湖提示",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/feicui"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  },
+  {
+   "id": "ins-guide",
+   "kind": "guide",
+   "text": "高原行程首日少洗澡、多喝水",
+   "scope": "region",
+   "scopeRef": "青甘",
+   "citations": [
+    {
+     "title": "高原指南",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/plateau"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  },
+  {
+   "id": "ins-plan",
+   "kind": "plan",
+   "text": "每日驾驶预留 1 小时机动时间",
+   "scope": "theme",
+   "scopeRef": "自驾",
+   "citations": [
+    {
+     "title": "自驾规划",
+     "platform": "fixture-web",
+     "url": "https://example.invalid/drive"
+    }
+   ],
+   "attribution": {
+    "source": "caller",
+    "label": "fixture"
+   }
+  }
+ ],
+ "advice": {
+  "weather": [
+   {
+    "date": "2026-10-01",
+    "dayForecast": "晴",
+    "tempRange": [
+     2,
+     14
+    ],
+    "temperatureBasis": "forecast",
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "placeId": "place-xining",
+    "location": "西宁"
+   },
+   {
+    "date": "2026-10-02",
+    "dayForecast": "晴",
+    "tempRange": [
+     2,
+     14
+    ],
+    "temperatureBasis": "forecast",
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "placeId": "place-chaka",
+    "location": "茶卡"
+   },
+   {
+    "date": "2026-10-03",
+    "dayForecast": "晴",
+    "tempRange": [
+     2,
+     14
+    ],
+    "temperatureBasis": "historical",
+    "beyondForecastWindow": true,
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "placeId": "place-feicui",
+    "location": "翡翠湖"
+   }
+  ],
+  "clothing": [
+   "防风外套",
+   "防晒帽"
+  ],
+  "packingList": [
+   "保温水壶",
+   "墨镜"
+  ],
+  "extraTips": [
+   "加油站间距大，见站补油"
+  ]
+ },
+ "transport": [
+  {
+   "mode": "rail",
+   "segments": [
+    {
+     "from": "出发地",
+     "to": "西宁",
+     "no": "G999",
+     "depart": "07:30",
+     "arrive": "12:00"
+    }
+   ],
+   "totalPriceRange": [
+    260,
+    520
+   ],
+   "currency": "CNY",
+   "durationMinutes": 270,
+   "source": {
+    "platform": "fixture-web",
+    "url": "https://example.invalid/fixture",
+    "fetchedAt": "2026-10-01T00:00:00.000Z"
+   }
+  }
+ ],
+ "rentalQuotes": {
+  "schemaVersion": 2,
+  "placesVersion": 1,
+  "inputFingerprint": "fixture",
+  "generatedAt": "2026-10-01T00:00:00.000Z",
+  "quotes": [
+   {
+    "vehicleType": "SUV（fixture）",
+    "days": 3,
+    "quote": {
+     "range": [
+      350,
+      420
+     ],
+     "currency": "CNY",
+     "unit": "day",
+     "observedAt": "2026-10-01T00:00:00.000Z",
+     "taxStatus": "unknown"
+    },
+    "source": {
+     "platform": "fixture-web",
+     "url": "https://example.invalid/fixture",
+     "fetchedAt": "2026-10-01T00:00:00.000Z"
+    },
+    "pickupPlaceId": "place-xining"
+   }
+  ],
+  "records": [
+   {
+    "placeId": "place-xining",
+    "status": "quoted"
+   }
+  ],
+  "degraded": [],
+  "consultationOnly": true,
+  "disclaimer": "租车信息为咨询级、非实时、不可预订（fixture）"
+ },
+ "cost": {
+  "schemaVersion": 2,
+  "placesVersion": 1,
+  "inputFingerprint": "fixture",
+  "generatedAt": "2026-10-01T00:00:00.000Z",
+  "currency": "CNY",
+  "components": {
+   "intercityTransport": {
+    "min": 520,
+    "max": 1040,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "quoted",
+    "assumptions": []
+   },
+   "rental": {
+    "min": 1050,
+    "max": 1260,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "quoted",
+    "assumptions": [
+     "含保险（fixture）"
+    ]
+   },
+   "lodging": {
+    "min": 900,
+    "max": 1500,
+    "currency": "USD",
+    "source": "fixture-foreign",
+    "status": "estimated",
+    "assumptions": [
+     "外币报价原样展示，不换算"
+    ]
+   },
+   "tickets": {
+    "min": 300,
+    "max": 300,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "quoted",
+    "assumptions": []
+   },
+   "food": {
+    "min": 600,
+    "max": 900,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "estimated",
+    "assumptions": [
+     "按人均估算"
+    ]
+   },
+   "misc": {
+    "min": 0,
+    "max": 0,
+    "currency": "CNY",
+    "source": "fixture",
+    "status": "unavailable",
+    "assumptions": [
+     "暂无数据，不计入总数"
+    ]
+   }
+  },
+  "total": {
+   "min": 3370,
+   "max": 5000,
+   "currency": "CNY"
+  },
+  "warnings": [
+   "misc 组件无可用数据（fixture）"
+  ],
+  "assumptions": [
+   "fixture 成本均为示例"
+  ]
+ },
+ "artifactStatus": {
+  "itinerary": {
+   "version": 2,
+   "state": "current"
+  },
+  "intel": {
+   "version": 1,
+   "state": "current"
+  },
+  "places": {
+   "version": 1,
+   "state": "current"
+  },
+  "transport": {
+   "version": 1,
+   "state": "current"
+  },
+  "advice": {
+   "version": 1,
+   "state": "current"
+  },
+  "insights": {
+   "version": 1,
+   "state": "current"
+  },
+  "rental": {
+   "version": 1,
+   "state": "current"
+  },
+  "cost": {
+   "version": 1,
+   "state": "current"
+  },
+  "route-transport": {
+   "version": 1,
+   "state": "current"
+  }
+ }
+}
