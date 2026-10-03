@@ -120,9 +120,20 @@ function isAreaKind(kind: ResolveKind): boolean {
   return kind === 'lodging' || kind === 'area'
 }
 
-/** 行政区名正常化：去除 省/市/区/县/镇/乡/街道/盟/旗/自治州 等行政区后缀。 */
+/**
+ * 行政区名正常化：去除 省/市/区/县/镇/乡/街道/盟/旗/自治州/地区/自治县 等行政区后缀。
+ *
+ * 另剥**裸「州」**（地级「XX州」：海西州/凉山州/甘孜州…），否则 `海西州` 这类 hint 与
+ * 渠道回报的全称 district（`…海西蒙古族藏族自治州…`）双向包含均不成立 → 判假冲突 → 澄清
+ * 死循环（2026-10-03 青甘复跑实测）。**但仅当剥后仍余 ≥2 字词干**：`苏州`/`杭州` 剥成
+ * 单字会与任意含该字的 district 误判一致，且单字不安全；省级「贵州」也因词干仅 1 字而不被剥。
+ */
 function normalizeRegion(s: string): string {
-  return s.trim().replace(/(省|市|区|县|镇|乡|街道|盟|旗|自治州|地区|自治县)$/, '').trim()
+  const trimmed = s.trim()
+  const stripped = trimmed.replace(/(省|市|区|县|镇|乡|街道|盟|旗|自治州|地区|自治县)$/, '').trim()
+  if (stripped !== trimmed) return stripped
+  if (trimmed.endsWith('州') && trimmed.length >= 3) return trimmed.slice(0, -1)
+  return trimmed
 }
 
 /** 省级行政区名（无后缀）。省级是宽泛范围：其下任何地市/区县都属一致。 */

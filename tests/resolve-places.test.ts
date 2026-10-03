@@ -728,6 +728,35 @@ describe('T9 C2 可靠唯一且地域一致的自动采用门', () => {
     expect(place?.coordinate_source).toBe('amap')
     expect(place?.resolveConfidence).toBe('high')
   })
+
+  it('I-1 修复：地级裸「州」hint（海西州）匹配全称 district（…蒙古族藏族自治州…）→ 一致', async () => {
+    // 2026-10-03 青甘复跑实测：normalizeRegion 只剥「自治州」不剥裸「州」→ hint『海西州』
+    // 与 district『青海省海西蒙古族藏族自治州德令哈市』双向包含均不成立 → 判假冲突 →
+    // 每轮 ≤3 条澄清死循环。修复：仅当剥后余 ≥2 字词干时剥裸「州」。
+    const planId = await makeReadyPlan({ intel: [intelItem('tencent-poi:1', '德令哈', 'attraction', false)] })
+    const amap = mockProvider('amap', {
+      run: () => [{ coords: coords(97.36, 37.37), confidence: 'medium', district: '青海省海西蒙古族藏族自治州德令哈市' }],
+    })
+    const r = await runResolvePlaces({
+      planId,
+      candidates: [{ candidateId: 'c1', name: '德令哈', kind: 'attraction', regionHint: '海西州', intelRefs: ['tencent-poi:1'] }],
+      selectionOrder: ['c1'],
+    }, store, baseDeps([amap.provider]))
+    expect(r.status).toBe('ready')
+    expect(r.pendingClarifications).toHaveLength(0)
+    expect(r.places.find((p) => p.candidateId === 'c1')?.regionVerification).toBe('verified')
+  })
+
+  it('I-1 反例：省级「贵州」词干仅 1 字不剥「州」，与成都 district 仍判冲突（不误放行）', async () => {
+    const planId = await makeReadyPlan({ intel: [intelItem('tencent-poi:1', '甲秀楼', 'attraction', false)] })
+    const amap = mockProvider('amap', { run: () => [{ coords: coords(104.06, 30.65), confidence: 'high', district: '成都市' }] })
+    const r = await runResolvePlaces({
+      planId,
+      candidates: [{ candidateId: 'c1', name: '甲秀楼', kind: 'attraction', regionHint: '贵州', intelRefs: ['tencent-poi:1'] }],
+      selectionOrder: ['c1'],
+    }, store, baseDeps([amap.provider]))
+    expect(r.status).toBe('needs_clarification')
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
